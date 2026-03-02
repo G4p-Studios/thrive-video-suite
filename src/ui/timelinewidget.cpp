@@ -54,6 +54,24 @@ void TimelineWidget::refresh()
     updateStatusLabel();
 }
 
+void TimelineWidget::setTimeline(Timeline *timeline)
+{
+    if (m_timeline)
+        m_timeline->disconnect(this);
+
+    m_timeline = timeline;
+
+    connect(m_timeline, &Timeline::currentTrackChanged,
+            this, &TimelineWidget::refresh);
+    connect(m_timeline, &Timeline::currentClipChanged,
+            this, [this](int, int) { refresh(); });
+    connect(m_timeline, &Timeline::playheadChanged,
+            this, [this](const TimeCode &) { refresh(); });
+
+    m_accessibleTimeline->setTimeline(m_timeline);
+    updateStatusLabel();
+}
+
 // ── keyboard navigation ─────────────────────────────────────────────
 
 void TimelineWidget::keyPressEvent(QKeyEvent *event)
@@ -86,6 +104,17 @@ void TimelineWidget::keyPressEvent(QKeyEvent *event)
     case Qt::Key_N:
         m_timeline->navigatePreviousMarker();
         break;
+
+    case Qt::Key_Home:
+        m_timeline->setPlayheadPosition(TimeCode(0, 25.0));
+        break;
+
+    case Qt::Key_End: {
+        auto dur = m_timeline->totalDuration();
+        if (dur.frame() > 0)
+            m_timeline->setPlayheadPosition(dur);
+        break;
+    }
 
     default:
         QWidget::keyPressEvent(event);

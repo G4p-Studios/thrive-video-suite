@@ -13,6 +13,7 @@ class MltEngine;
 class PlaybackController;
 class RenderEngine;
 class EffectCatalog;
+class TractorBuilder;
 class Announcer;
 class AudioCueManager;
 class ProjectSerializer;
@@ -22,6 +23,7 @@ class TransportBar;
 class MediaBrowser;
 class PropertiesPanel;
 class EffectsBrowser;
+class Clip;
 
 /// The main application window.  Assembles all panels as QDockWidgets
 /// and wires up top-level actions.
@@ -56,6 +58,9 @@ private:
     void registerShortcuts();
     void checkFirstRun();
     void checkPostRestartPlugins();
+    void rebuildTractor();
+    void reconnectTimeline();
+    void updateWindowTitle();
 
     // Owned subsystems
     Project            *m_project   = nullptr;
@@ -63,6 +68,7 @@ private:
     PlaybackController *m_playback  = nullptr;
     RenderEngine       *m_render    = nullptr;
     EffectCatalog      *m_catalog   = nullptr;
+    TractorBuilder     *m_tractorBuilder = nullptr;
     Announcer          *m_announcer = nullptr;
     AudioCueManager    *m_cues      = nullptr;
     QUndoStack         *m_undoStack = nullptr;
@@ -78,6 +84,9 @@ private:
     // File state
     QString m_currentFilePath;
     bool    m_modified = false;
+
+    // Clipboard for cut/copy/paste
+    Clip   *m_clipboardClip = nullptr;
 
     // Actions
     QAction *m_actNew         = nullptr;
@@ -96,6 +105,12 @@ private:
     QAction *m_actPaste       = nullptr;
     QAction *m_actDelete      = nullptr;
     QAction *m_actSelectAll   = nullptr;
+
+    // Timeline menu actions
+    QAction *m_actSplitClip    = nullptr;
+    QAction *m_actAddTrack     = nullptr;
+    QAction *m_actRemoveTrack  = nullptr;
+    QAction *m_actAddMarker    = nullptr;
 };
 
 } // namespace Thrive

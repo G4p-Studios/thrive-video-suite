@@ -39,6 +39,24 @@ void AccessibleTimeline::setEnabled(bool enabled)
     m_enabled = enabled;
 }
 
+void AccessibleTimeline::setTimeline(Timeline *timeline)
+{
+    if (m_timeline)
+        m_timeline->disconnect(this);
+
+    m_timeline = timeline;
+    m_lastAnnouncedMarker = -1;
+
+    connect(m_timeline, &Timeline::currentTrackChanged,
+            this, &AccessibleTimeline::onCurrentTrackChanged);
+    connect(m_timeline, &Timeline::currentClipChanged,
+            this, [this](int /*trackIndex*/, int clipIndex) {
+                onCurrentClipChanged(clipIndex);
+            });
+    connect(m_timeline, &Timeline::playheadChanged,
+            this, [this](const TimeCode &) { onPlayheadChanged(); });
+}
+
 // ── slot: track focus changed ───────────────────────────────────────
 
 void AccessibleTimeline::onCurrentTrackChanged(int index)

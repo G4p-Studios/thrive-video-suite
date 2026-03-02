@@ -36,6 +36,9 @@ public:
     /// Re-read model and update the status label.
     void refresh();
 
+    /// Replace the timeline model (e.g. after New Project).
+    void setTimeline(Timeline *timeline);
+
     /// Access the underlying Timeline model (used by AccessibleTimelineView).
     [[nodiscard]] Timeline *timeline() const { return m_timeline; }
 

@@ -32,6 +32,9 @@ public:
     [[nodiscard]] bool isEnabled() const { return m_enabled; }
     void setEnabled(bool enabled);
 
+    /// Replace the timeline model (after New Project / Open).
+    void setTimeline(Timeline *timeline);
+
 private slots:
     void onCurrentTrackChanged(int index);
     void onCurrentClipChanged(int index);

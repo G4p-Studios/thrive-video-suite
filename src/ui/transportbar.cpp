@@ -62,6 +62,28 @@ TransportBar::TransportBar(PlaybackController *playback,
 
     connect(m_timeline, &Timeline::playheadChanged,
             this, [this](const TimeCode &) { updateTimecodeDisplay(); });
+
+    // Update Play/Pause button text when state changes
+    connect(m_playback, &PlaybackController::stateChanged,
+            this, [this](PlaybackController::State state) {
+                if (state == PlaybackController::State::Playing) {
+                    m_btnPlayPause->setText(tr("❚❚"));
+                    m_btnPlayPause->setAccessibleName(tr("Pause"));
+                } else {
+                    m_btnPlayPause->setText(tr("▶"));
+                    m_btnPlayPause->setAccessibleName(tr("Play"));
+                }
+            });
+
+    // Show shuttle speed (J/K/L)
+    connect(m_playback, &PlaybackController::speedChanged,
+            this, [this](double speed) {
+                if (speed != 0.0 && speed != 1.0) {
+                    m_announcer->announce(
+                        tr("Speed: %1x").arg(speed, 0, 'g', 2),
+                        Announcer::Priority::Low);
+                }
+            });
 }
 
 // ── slots ───────────────────────────────────────────────────────────
@@ -104,6 +126,18 @@ void TransportBar::updateTimecodeDisplay()
 {
     const TimeCode &pos = m_timeline->playheadPosition();
     m_timecodeLabel->setText(pos.toString());
+}
+
+void TransportBar::setTimeline(Timeline *timeline)
+{
+    if (m_timeline)
+        m_timeline->disconnect(this);
+
+    m_timeline = timeline;
+
+    connect(m_timeline, &Timeline::playheadChanged,
+            this, [this](const TimeCode &) { updateTimecodeDisplay(); });
+    updateTimecodeDisplay();
 }
 
 // ── helpers ─────────────────────────────────────────────────────────

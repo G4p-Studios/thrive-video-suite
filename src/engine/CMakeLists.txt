@@ -6,6 +6,7 @@ qt_add_library(thrive-engine STATIC
     playbackcontroller.h playbackcontroller.cpp
     renderengine.h      renderengine.cpp
     effectcatalog.h     effectcatalog.cpp
+    tractorbuilder.h    tractorbuilder.cpp
 )
 
 target_include_directories(thrive-engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

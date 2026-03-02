@@ -29,6 +29,7 @@ public:
 
 public slots:
     void updateTimecodeDisplay();
+    void setTimeline(Timeline *timeline);
 
 private slots:
     void onPlayPause();

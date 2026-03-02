@@ -78,6 +78,8 @@ signals:
 private:
     void refreshConsumer();
     void updateState(State newState);
+    void startPositionTimer();
+    void stopPositionTimer();
 
     MltEngine *m_engine = nullptr;
     std::unique_ptr<Mlt::Consumer> m_consumer;
@@ -86,6 +88,7 @@ private:
     State  m_state = State::Stopped;
     double m_speed = 0.0;
     bool   m_scrubAudio = true;
+    QTimer *m_positionTimer = nullptr;
 };
 
 } // namespace Thrive

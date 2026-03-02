@@ -16,7 +16,14 @@ namespace Thrive {
 PlaybackController::PlaybackController(MltEngine *engine, QObject *parent)
     : QObject(parent)
     , m_engine(engine)
+    , m_positionTimer(new QTimer(this))
 {
+    m_positionTimer->setInterval(40); // ~25 fps polling
+    connect(m_positionTimer, &QTimer::timeout, this, [this]() {
+        if (m_producer && m_state == State::Playing) {
+            emit positionChanged(m_producer->position());
+        }
+    });
 }
 
 PlaybackController::~PlaybackController()
@@ -206,8 +213,24 @@ void PlaybackController::updateState(State newState)
 {
     if (m_state != newState) {
         m_state = newState;
+        if (newState == State::Playing)
+            startPositionTimer();
+        else
+            stopPositionTimer();
         emit stateChanged(m_state);
     }
+}
+
+void PlaybackController::startPositionTimer()
+{
+    if (m_positionTimer && !m_positionTimer->isActive())
+        m_positionTimer->start();
+}
+
+void PlaybackController::stopPositionTimer()
+{
+    if (m_positionTimer && m_positionTimer->isActive())
+        m_positionTimer->stop();
 }
 
 } // namespace Thrive
