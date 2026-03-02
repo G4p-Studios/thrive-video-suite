@@ -91,6 +91,11 @@ private:
     QAction *m_actQuit        = nullptr;
     QAction *m_actUndo        = nullptr;
     QAction *m_actRedo        = nullptr;
+    QAction *m_actCut         = nullptr;
+    QAction *m_actCopy        = nullptr;
+    QAction *m_actPaste       = nullptr;
+    QAction *m_actDelete      = nullptr;
+    QAction *m_actSelectAll   = nullptr;
 };
 
 } // namespace Thrive

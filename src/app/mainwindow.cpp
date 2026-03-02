@@ -262,6 +262,37 @@ void MainWindow::createActions()
 
     m_actUndo = m_undoStack->createUndoAction(this, tr("&Undo"));
     m_actRedo = m_undoStack->createRedoAction(this, tr("&Redo"));
+    m_actUndo->setShortcut(QKeySequence::Undo);
+    m_actRedo->setShortcut(QKeySequence::Redo);
+
+    m_actCut       = new QAction(tr("Cu&t"),        this);
+    m_actCopy      = new QAction(tr("&Copy"),       this);
+    m_actPaste     = new QAction(tr("&Paste"),      this);
+    m_actDelete    = new QAction(tr("&Delete"),     this);
+    m_actSelectAll = new QAction(tr("Select &All"), this);
+
+    m_actCut->setShortcut(QKeySequence::Cut);
+    m_actCopy->setShortcut(QKeySequence::Copy);
+    m_actPaste->setShortcut(QKeySequence::Paste);
+    m_actDelete->setShortcut(QKeySequence::Delete);
+    m_actSelectAll->setShortcut(QKeySequence::SelectAll);
+
+    // Edit action stubs – these will be wired to timeline clip operations
+    connect(m_actCut, &QAction::triggered, this, [this]() {
+        m_announcer->announce(tr("Cut"), Announcer::Priority::Normal);
+    });
+    connect(m_actCopy, &QAction::triggered, this, [this]() {
+        m_announcer->announce(tr("Copy"), Announcer::Priority::Normal);
+    });
+    connect(m_actPaste, &QAction::triggered, this, [this]() {
+        m_announcer->announce(tr("Paste"), Announcer::Priority::Normal);
+    });
+    connect(m_actDelete, &QAction::triggered, this, [this]() {
+        m_announcer->announce(tr("Delete"), Announcer::Priority::Normal);
+    });
+    connect(m_actSelectAll, &QAction::triggered, this, [this]() {
+        m_announcer->announce(tr("Select all"), Announcer::Priority::Normal);
+    });
 
     connect(m_actNew,   &QAction::triggered, this, &MainWindow::newProject);
     connect(m_actOpen,  &QAction::triggered, this, &MainWindow::openProject);
@@ -285,13 +316,20 @@ void MainWindow::createMenus()
     fileMenu->addSeparator();
     fileMenu->addAction(m_actExport);
     fileMenu->addSeparator();
+    fileMenu->addAction(m_actPreferences);
+    fileMenu->addSeparator();
     fileMenu->addAction(m_actQuit);
 
     auto *editMenu = menuBar()->addMenu(tr("&Edit"));
     editMenu->addAction(m_actUndo);
     editMenu->addAction(m_actRedo);
     editMenu->addSeparator();
-    editMenu->addAction(m_actPreferences);
+    editMenu->addAction(m_actCut);
+    editMenu->addAction(m_actCopy);
+    editMenu->addAction(m_actPaste);
+    editMenu->addAction(m_actDelete);
+    editMenu->addSeparator();
+    editMenu->addAction(m_actSelectAll);
 
     auto *helpMenu = menuBar()->addMenu(tr("&Help"));
     helpMenu->addAction(m_actWizard);
