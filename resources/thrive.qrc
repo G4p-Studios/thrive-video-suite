@@ -1,0 +1,15 @@
+<!-- SPDX-License-Identifier: MIT -->
+<!-- Thrive Video Suite – Embedded resources -->
+<RCC>
+    <qresource prefix="/sounds">
+        <file alias="clip_start.wav">sounds/clip_start.wav</file>
+        <file alias="clip_end.wav">sounds/clip_end.wav</file>
+        <file alias="gap.wav">sounds/gap.wav</file>
+        <file alias="track_boundary.wav">sounds/track_boundary.wav</file>
+        <file alias="selection.wav">sounds/selection.wav</file>
+        <file alias="error.wav">sounds/error.wav</file>
+    </qresource>
+    <qresource prefix="/translations">
+        <!-- Generated .qm files will be added here by qt_add_translations -->
+    </qresource>
+</RCC>
