@@ -28,16 +28,28 @@ bool ScreenReader::initialize()
     if (m_initialized)
         return true;
 
-    if (prism_init() != PRISM_OK)
+    // Prism v0.7.1 API: prism_init takes a PrismConfig pointer,
+    // returns a PrismContext pointer (nullptr on failure).
+    PrismConfig cfg = prism_config_init();
+    auto *ctx = prism_init(&cfg);
+    if (!ctx)
         return false;
 
     // Auto-detect the best available screen reader backend
-    PrismBackend *backend = nullptr;
-    if (prism_registry_create_best(&backend) != PRISM_OK || !backend) {
-        prism_shutdown();
+    PrismBackend *backend = prism_registry_create_best(ctx);
+    if (!backend) {
+        prism_shutdown(ctx);
         return false;
     }
 
+    // Initialize the backend
+    if (prism_backend_initialize(backend) != PRISM_OK) {
+        prism_backend_free(backend);
+        prism_shutdown(ctx);
+        return false;
+    }
+
+    m_context = static_cast<void *>(ctx);
     m_backend = static_cast<void *>(backend);
     m_initialized = true;
     return true;
@@ -49,11 +61,15 @@ void ScreenReader::shutdown()
         return;
 
     if (m_backend) {
-        prism_backend_destroy(static_cast<PrismBackend *>(m_backend));
+        prism_backend_free(static_cast<PrismBackend *>(m_backend));
         m_backend = nullptr;
     }
 
-    prism_shutdown();
+    if (m_context) {
+        prism_shutdown(static_cast<PrismContext *>(m_context));
+        m_context = nullptr;
+    }
+
     m_initialized = false;
 }
 
@@ -66,7 +82,7 @@ void ScreenReader::speak(const QString &text, bool interrupt)
     prism_backend_speak(
         static_cast<PrismBackend *>(m_backend),
         utf8.constData(),
-        interrupt ? 1 : 0);
+        interrupt);
 }
 
 void ScreenReader::braille(const QString &text)
@@ -89,7 +105,7 @@ void ScreenReader::output(const QString &text, bool interrupt)
     prism_backend_output(
         static_cast<PrismBackend *>(m_backend),
         utf8.constData(),
-        interrupt ? 1 : 0);
+        interrupt);
 }
 
 void ScreenReader::silence()
@@ -105,22 +121,22 @@ bool ScreenReader::isScreenReaderActive() const
     if (!m_initialized || !m_backend)
         return false;
 
-    // Check if the backend supports speech — if so, a screen reader is active
-    uint64_t features = 0;
-    if (prism_backend_get_features(
-            static_cast<PrismBackend *>(m_backend), &features) == PRISM_OK)
-    {
-        return (features & PRISM_BACKEND_SUPPORTS_SPEAK) != 0;
-    }
-    return false;
+    // prism_backend_get_features returns uint64_t directly in v0.7.1
+    const uint64_t features =
+        prism_backend_get_features(static_cast<PrismBackend *>(m_backend));
+    return (features & PRISM_BACKEND_SUPPORTS_SPEAK) != 0;
 }
 
 QString ScreenReader::detectedScreenReader() const
 {
-    // Prism doesn't expose a "name" directly — we rely on the backend type
-    // For now, return a generic indicator
-    if (!m_initialized)
+    if (!m_initialized || !m_backend)
         return tr("None");
+
+    // Prism v0.7.1 exposes backend name
+    const char *name =
+        prism_backend_name(static_cast<PrismBackend *>(m_backend));
+    if (name && *name)
+        return QString::fromUtf8(name);
     return tr("Active");
 }
 

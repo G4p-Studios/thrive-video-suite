@@ -72,6 +72,7 @@ public:
     QObject                *object()   const override;
     QAccessibleInterface   *parent()   const override;
     QAccessibleInterface   *child(int) const override { return nullptr; }
+    QAccessibleInterface   *childAt(int, int) const override { return nullptr; }
     int                     childCount() const override { return 0; }
     int                     indexOfChild(const QAccessibleInterface *) const override { return -1; }
 

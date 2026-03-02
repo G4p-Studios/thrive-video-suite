@@ -15,12 +15,12 @@ AudioCueManager::AudioCueManager(QObject *parent)
 void AudioCueManager::loadCues()
 {
     static const QHash<Cue, QString> paths = {
-        { Cue::ClipStart,      QStringLiteral(":/sounds/clip_start.wav")      },
-        { Cue::ClipEnd,        QStringLiteral(":/sounds/clip_end.wav")        },
-        { Cue::Gap,            QStringLiteral(":/sounds/gap.wav")             },
-        { Cue::TrackBoundary,  QStringLiteral(":/sounds/track_boundary.wav")  },
-        { Cue::Selection,      QStringLiteral(":/sounds/selection.wav")       },
-        { Cue::Error,          QStringLiteral(":/sounds/error.wav")           },
+        { Cue::ClipStart,      QStringLiteral("qrc:/sounds/clip_start.wav")      },
+        { Cue::ClipEnd,        QStringLiteral("qrc:/sounds/clip_end.wav")        },
+        { Cue::Gap,            QStringLiteral("qrc:/sounds/gap.wav")             },
+        { Cue::TrackBoundary,  QStringLiteral("qrc:/sounds/track_boundary.wav")  },
+        { Cue::Selection,      QStringLiteral("qrc:/sounds/selection.wav")       },
+        { Cue::Error,          QStringLiteral("qrc:/sounds/error.wav")           },
     };
 
     for (auto it = paths.cbegin(); it != paths.cend(); ++it) {

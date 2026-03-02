@@ -12,6 +12,8 @@
 #include <QFileDialog>
 #include <QMessageBox>
 
+#include <algorithm>
+
 namespace Thrive {
 
 PluginManager::PluginManager(Announcer *announcer, QWidget *parent)

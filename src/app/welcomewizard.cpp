@@ -7,8 +7,22 @@
 #include <QWizardPage>
 #include <QLabel>
 #include <QVBoxLayout>
+#include <QTimer>
+#include <QTextDocumentFragment>
 
 namespace Thrive {
+
+// Strip HTML tags and decode entities, returning plain readable text.
+static QString stripHtml(const QString &html)
+{
+    // QTextDocumentFragment handles all HTML → plain text conversion:
+    // strips tags, decodes &amp; etc., turns <li> into lines.
+    QString plain = QTextDocumentFragment::fromHtml(html).toPlainText();
+    // Collapse multiple blank lines into single newlines
+    while (plain.contains(QLatin1String("\n\n\n")))
+        plain.replace(QLatin1String("\n\n\n"), QLatin1String("\n\n"));
+    return plain.trimmed();
+}
 
 // Helper: create a wizard page with a title and rich-text body.
 static QWizardPage *makePage(const QString &title,
@@ -21,7 +35,11 @@ static QWizardPage *makePage(const QString &title,
     auto *label = new QLabel(body);
     label->setWordWrap(true);
     label->setTextFormat(Qt::RichText);
-    label->setAccessibleName(body);
+    label->setFocusPolicy(Qt::StrongFocus);
+
+    // Use plain text for the accessible name so screen readers
+    // don't read out HTML tags like <p>, <b>, </li>, etc.
+    label->setAccessibleName(stripHtml(body));
 
     auto *layout = new QVBoxLayout(page);
     layout->addWidget(label);
@@ -49,6 +67,10 @@ WelcomeWizard::WelcomeWizard(Announcer *announcer, QWidget *parent)
 
     connect(this, &QWizard::currentIdChanged,
             this, [this]() { announceCurrentPage(); });
+
+    // Announce the first page shortly after the dialog opens,
+    // giving the window time to appear and receive focus.
+    QTimer::singleShot(500, this, [this]() { announceCurrentPage(); });
 }
 
 void WelcomeWizard::addWelcomePage()
@@ -147,8 +169,21 @@ void WelcomeWizard::announceCurrentPage()
     auto *page = currentPage();
     if (!page) return;
 
-    // Announce the page title
-    m_announcer->announce(page->title(), Announcer::Priority::High);
+    // Build a complete announcement: title + body text
+    QString announcement = page->title();
+
+    // Find the QLabel child which holds the body text
+    auto *label = page->findChild<QLabel *>();
+    if (label) {
+        QString body = label->accessibleName();
+        if (!body.isEmpty()) {
+            announcement += QStringLiteral(". ") + body;
+        }
+        // Give the label focus so NVDA can also read it via object nav
+        label->setFocus();
+    }
+
+    m_announcer->announce(announcement, Announcer::Priority::High);
 }
 
 } // namespace Thrive

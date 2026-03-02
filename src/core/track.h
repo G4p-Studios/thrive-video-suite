@@ -37,7 +37,7 @@ public:
 
     // Clips (ordered by timeline position)
     [[nodiscard]] const QVector<Clip *> &clips() const { return m_clips; }
-    [[nodiscard]] int clipCount() const { return m_clips.size(); }
+    [[nodiscard]] int clipCount() const { return static_cast<int>(m_clips.size()); }
     [[nodiscard]] Clip *clipAt(int index) const;
 
     void addClip(Clip *clip);

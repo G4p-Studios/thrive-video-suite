@@ -30,6 +30,7 @@ find_package(Qt6 REQUIRED COMPONENTS
     Widgets
     Multimedia
     LinguistTools
+    Core5Compat
 )
 
 qt_standard_project_setup(
@@ -42,6 +43,16 @@ qt_standard_project_setup(
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(MLT REQUIRED IMPORTED_TARGET mlt-framework-7)
 pkg_check_modules(MLTPP REQUIRED IMPORTED_TARGET mlt++-7)
+
+# On Windows/MSVC, MLT headers require pthread.h from pthreads-win32.
+# Ensure the vcpkg include path is added to MLT's imported targets.
+if(WIN32 AND DEFINED VCPKG_INSTALLED_DIR)
+    set(_vcpkg_inc "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include")
+    if(EXISTS "${_vcpkg_inc}/pthread.h")
+        target_include_directories(PkgConfig::MLT INTERFACE "${_vcpkg_inc}")
+        target_include_directories(PkgConfig::MLTPP INTERFACE "${_vcpkg_inc}")
+    endif()
+endif()
 
 # ---------------------------------------------------------------------------
 # Prism – screen reader abstraction (fetched from GitHub)
@@ -75,12 +86,13 @@ add_subdirectory(src/engine)
 add_subdirectory(src/accessibility)
 add_subdirectory(src/ui)
 add_subdirectory(src/app)
+enable_testing()
 add_subdirectory(tests)
 
 # ---------------------------------------------------------------------------
 # Internationalization – collected AFTER all targets are declared
 # ---------------------------------------------------------------------------
-qt_add_translations(${PROJECT_NAME}
+qt_add_translations(thrive-video-suite
     TS_OUTPUT_DIRECTORY translations
     NO_GENERATE_PLURALS_TS_FILE
 )

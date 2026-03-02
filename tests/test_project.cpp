@@ -28,7 +28,7 @@ private slots:
 
     void defaultValues()
     {
-        QVERIFY(m_project->name().isEmpty());
+        QCOMPARE(m_project->name(), tr("Untitled Project"));
         QVERIFY(m_project->filePath().isEmpty());
         QVERIFY(!m_project->isModified());
         QVERIFY(m_project->timeline() != nullptr);
@@ -108,7 +108,7 @@ private slots:
 
         m_project->reset();
 
-        QVERIFY(m_project->name().isEmpty());
+        QCOMPARE(m_project->name(), tr("Untitled Project"));
         QVERIFY(!m_project->isModified());
         QCOMPARE(m_project->width(), 1920);
         QCOMPARE(m_project->height(), 1080);

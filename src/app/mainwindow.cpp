@@ -8,6 +8,7 @@
 
 #include "../core/project.h"
 #include "../core/timeline.h"
+#include "../core/track.h"
 #include "../core/projectserializer.h"
 #include "../engine/mltengine.h"
 #include "../engine/playbackcontroller.h"
@@ -22,6 +23,7 @@
 #include "../ui/propertiespanel.h"
 #include "../ui/effectsbrowser.h"
 #include "../ui/preferencesdialog.h"
+#include "../ui/shortcuteditor.h"
 
 #include <QAction>
 #include <QMenuBar>
@@ -161,7 +163,9 @@ void MainWindow::exportVideo()
     if (path.isEmpty()) return;
 
     m_announcer->announce(tr("Export started…"), Announcer::Priority::High);
-
+    // Disconnect previous render connections to avoid accumulating duplicates
+    disconnect(m_render, &RenderEngine::renderProgress, this, nullptr);
+    disconnect(m_render, &RenderEngine::renderFinished, this, nullptr);
     connect(m_render, &RenderEngine::renderProgress,
             this, [this](int percent) {
                 m_announcer->announce(

@@ -22,7 +22,7 @@ inline constexpr int EXIT_RESTART = 42;
 inline constexpr int kDefaultPreviewScale = 640;
 
 /// Default frames per second for new projects.
-inline constexpr double kDefaultFps = 30.0;
+inline constexpr double kDefaultFps = 25.0;
 
 /// Default composition resolution.
 inline constexpr int kDefaultWidth  = 1920;

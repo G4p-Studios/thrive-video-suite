@@ -24,7 +24,7 @@ public:
 
     // Tracks
     [[nodiscard]] const QVector<Track *> &tracks() const { return m_tracks; }
-    [[nodiscard]] int trackCount() const { return m_tracks.size(); }
+    [[nodiscard]] int trackCount() const { return static_cast<int>(m_tracks.size()); }
     [[nodiscard]] Track *trackAt(int index) const;
 
     void addTrack(Track *track);

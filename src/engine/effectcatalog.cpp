@@ -6,7 +6,7 @@
 
 #include <mlt++/MltRepository.h>
 #include <mlt++/MltProperties.h>
-#include <mlt/framework/mlt_service.h>
+#include <framework/mlt_service.h>
 
 namespace Thrive {
 

@@ -52,7 +52,8 @@ private:
     ScreenReader &operator=(const ScreenReader &) = delete;
 
     bool  m_initialized = false;
-    void *m_backend = nullptr; // opaque Prism backend handle
+    void *m_context = nullptr; // PrismContext*
+    void *m_backend = nullptr; // PrismBackend*
 };
 
 } // namespace Thrive

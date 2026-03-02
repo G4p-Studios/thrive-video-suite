@@ -6,7 +6,7 @@
 #include <mlt++/MltFactory.h>
 #include <mlt++/MltProfile.h>
 #include <mlt++/MltRepository.h>
-#include <mlt/framework/mlt_factory.h>
+#include <framework/mlt_factory.h>
 
 #include <QCoreApplication>
 #include <QDir>
@@ -132,7 +132,7 @@ void MltEngine::rebuildPreviewProfile()
 
 QString MltEngine::modulesPath() const
 {
-    return QString::fromUtf8(mlt_factory_prefix());
+    return QString::fromUtf8(mlt_factory_directory());
 }
 
 } // namespace Thrive

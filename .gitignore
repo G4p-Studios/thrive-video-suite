@@ -36,3 +36,4 @@ qrc_*.cpp
 Thumbs.db
 .DS_Store
 desktop.ini
+build_output.txt
