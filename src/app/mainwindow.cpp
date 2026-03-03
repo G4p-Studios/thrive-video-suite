@@ -123,10 +123,24 @@ MainWindow::MainWindow(Project *project,
     // First-run wizard
     checkFirstRun();
 
-    // Restore window geometry and dock layout from previous session
-    QSettings geo;
-    restoreGeometry(geo.value(QStringLiteral("mainwindow/geometry")).toByteArray());
-    restoreState(geo.value(QStringLiteral("mainwindow/state")).toByteArray());
+    // Restore window geometry and dock layout from previous session.
+    // Deferred to a zero-timer so the restore runs after the initial
+    // show() layout pass – avoids crashes from incompatible state blobs.
+    QTimer::singleShot(0, this, [this]() {
+        QSettings geo;
+        const QByteArray geom =
+            geo.value(QStringLiteral("mainwindow/geometry")).toByteArray();
+        const QByteArray state =
+            geo.value(QStringLiteral("mainwindow/state")).toByteArray();
+        if (!geom.isEmpty())
+            restoreGeometry(geom);
+        if (!state.isEmpty()) {
+            if (!restoreState(state, kWindowStateVersion)) {
+                // Discard incompatible state
+                geo.remove(QStringLiteral("mainwindow/state"));
+            }
+        }
+    });
 }
 
 // ── close ────────────────────────────────────────────────────────────
@@ -150,7 +164,8 @@ void MainWindow::closeEvent(QCloseEvent *event)
     // Persist window geometry and dock layout
     QSettings s;
     s.setValue(QStringLiteral("mainwindow/geometry"), saveGeometry());
-    s.setValue(QStringLiteral("mainwindow/state"),    saveState());
+    s.setValue(QStringLiteral("mainwindow/state"),
+               saveState(kWindowStateVersion));
 
     event->accept();
 }

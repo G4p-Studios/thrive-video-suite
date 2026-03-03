@@ -38,4 +38,8 @@ inline constexpr const char *kSettingsAudioCuesOn    = "accessibility/audioCues"
 inline constexpr const char *kSettingsAudioCueVolume = "accessibility/audioCueVolume";
 inline constexpr const char *kSettingsFirstRun       = "app/firstRun";
 
+/// Version stamp for QMainWindow::saveState / restoreState.
+/// Bump this when dock widgets are added or removed to discard old state.
+inline constexpr int kWindowStateVersion = 1;
+
 } // namespace Thrive
