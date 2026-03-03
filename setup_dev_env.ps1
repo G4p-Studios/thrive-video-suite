@@ -602,20 +602,18 @@ Write-Host "======================================================" -ForegroundC
 Write-Host "  Setup complete!" -ForegroundColor Cyan
 Write-Host "======================================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "  Before each build session, load the environment:" -ForegroundColor White
-Write-Host ""
-Write-Host "    . $EnvFile" -ForegroundColor White
-Write-Host ""
-Write-Host "  Then configure and build:" -ForegroundColor White
+Write-Host "  To build, just run the build script from the project root:" -ForegroundColor White
 Write-Host ""
 Write-Host "    cd c:\Users\alex\thrive-video-suite" -ForegroundColor White
-Write-Host "    cmake -B build -G Ninja ``" -ForegroundColor White
-Write-Host "        -DCMAKE_PREFIX_PATH=`"$QtPrefixDir;$MltInstDir`" ``" -ForegroundColor White
-Write-Host "        -DCMAKE_TOOLCHAIN_FILE=`"$vcpkgToolchain`"" -ForegroundColor White
-Write-Host "    cmake --build build" -ForegroundColor White
+Write-Host "    .\build.bat" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "  Other commands:" -ForegroundColor White
+Write-Host "    build test         Build and run tests" -ForegroundColor White
+Write-Host "    build run          Build and launch the app" -ForegroundColor White
+Write-Host "    build clean        Delete the build directory" -ForegroundColor White
 Write-Host ""
 Write-Host "  Installed locations:" -ForegroundColor White
-Write-Host "    Qt $QtVersion   : $QtPrefixDir"
+Write-Host "    Qt          : $QtPrefixDir"
 Write-Host "    MLT 7       : $MltInstDir"
 Write-Host "    vcpkg       : $VcpkgDir"
 Write-Host "    pkg-config  : $pkgConfBin"

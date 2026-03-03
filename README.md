@@ -32,24 +32,46 @@ A **fully accessible non-linear video editor** built for blind and visually impa
 
 ## Prerequisites
 
-- **Qt 6.5+** — install via the Qt online installer or your package manager
-- **MLT Framework 7** — `pkg-config` must find `mlt-framework-7` and `mlt++-7`
-- **CMake 3.21+**
-- **A C++23-capable compiler** — MSVC 2022 17.6+, GCC 13+, or Clang 17+
-- **pkg-config** — on Windows, install via `vcpkg install pkgconf` or use MSYS2
+- **Visual Studio 2022** — Community edition (free) with the "Desktop development with C++" workload
+- **Qt 6.5+** — install via the [Qt online installer](https://www.qt.io/download-qt-installer-oss); select **MSVC 2022 64-bit** and **Qt Multimedia**
+- **Git** — [git-scm.com](https://git-scm.com/download/win) (or `winget install Git.Git`)
 
-Prism and QuaZip are fetched automatically by CMake via `FetchContent`.
+Everything else (CMake, vcpkg, MLT Framework, pkg-config) is installed automatically by the build script.
 
 ## Building
 
+```
+build              # configure + build (installs deps on first run)
+build test         # build + run all unit tests
+build run          # build + launch the app
+build clean        # delete the build directory
+build reconfigure  # force a fresh cmake configure
+build setup        # install dependencies only
+```
+
+That's it — one command. On a fresh clone the first `build` takes 10–20 minutes while vcpkg compiles packages and MLT is downloaded; subsequent builds are incremental and fast.
+
+### First-time setup (step by step)
+
+1. Install **Visual Studio 2022** with "Desktop development with C++"
+2. Install **Qt 6** via the Qt online installer (select MSVC 2022 64-bit + Multimedia)
+3. Clone this repo and run `build`:
+
 ```bash
-# Configure
-cmake -B build -DCMAKE_BUILD_TYPE=Release
+git clone <repo-url>
+cd thrive-video-suite
+build
+```
 
-# Build
-cmake --build build --config Release
+### Advanced / manual build
 
-# Run tests
+If you prefer to configure CMake yourself:
+
+```bash
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo ^
+    -DCMAKE_PREFIX_PATH="C:\Qt\6.10.2\msvc2022_64" ^
+    -DCMAKE_TOOLCHAIN_FILE="C:\dev\thrive-deps\vcpkg\scripts\buildsystems\vcpkg.cmake"
+cmake --build build
 cd build && ctest --output-on-failure
 ```
 
