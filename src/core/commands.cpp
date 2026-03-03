@@ -7,6 +7,7 @@
 #include "clip.h"
 #include "effect.h"
 #include "marker.h"
+#include "transition.h"
 
 namespace Thrive {
 
@@ -358,6 +359,72 @@ void RemoveMarkerCommand::undo()
 void RemoveMarkerCommand::redo()
 {
     m_timeline->removeMarker(m_index);
+}
+
+// ===========================================================================
+// AddTransitionCommand
+// ===========================================================================
+AddTransitionCommand::AddTransitionCommand(Clip *clip, Edge edge,
+                                           Transition *transition,
+                                           QUndoCommand *parent)
+    : QUndoCommand(parent)
+    , m_clip(clip)
+    , m_edge(edge)
+    , m_transition(transition)
+{
+    setText(QObject::tr("Add transition \"%1\"")
+                .arg(transition ? transition->displayName()
+                                : QStringLiteral("?")));
+}
+
+void AddTransitionCommand::undo()
+{
+    if (m_edge == Edge::In)
+        m_clip->setInTransition(m_oldTransition);
+    else
+        m_clip->setOutTransition(m_oldTransition);
+}
+
+void AddTransitionCommand::redo()
+{
+    m_oldTransition = (m_edge == Edge::In) ? m_clip->inTransition()
+                                           : m_clip->outTransition();
+    if (m_edge == Edge::In)
+        m_clip->setInTransition(m_transition);
+    else
+        m_clip->setOutTransition(m_transition);
+}
+
+// ===========================================================================
+// RemoveTransitionCommand
+// ===========================================================================
+RemoveTransitionCommand::RemoveTransitionCommand(Clip *clip, Edge edge,
+                                                 QUndoCommand *parent)
+    : QUndoCommand(parent)
+    , m_clip(clip)
+    , m_edge(edge)
+{
+    auto *t = (edge == Edge::In) ? clip->inTransition() : clip->outTransition();
+    setText(QObject::tr("Remove transition \"%1\"")
+                .arg(t ? t->displayName() : QStringLiteral("?")));
+}
+
+void RemoveTransitionCommand::undo()
+{
+    if (m_edge == Edge::In)
+        m_clip->setInTransition(m_transition);
+    else
+        m_clip->setOutTransition(m_transition);
+}
+
+void RemoveTransitionCommand::redo()
+{
+    m_transition = (m_edge == Edge::In) ? m_clip->inTransition()
+                                        : m_clip->outTransition();
+    if (m_edge == Edge::In)
+        m_clip->setInTransition(nullptr);
+    else
+        m_clip->setOutTransition(nullptr);
 }
 
 } // namespace Thrive

@@ -4,6 +4,7 @@
 #pragma once
 
 #include <QObject>
+#include <QByteArray>
 #include <memory>
 #include <vector>
 
@@ -13,6 +14,7 @@ class Playlist;
 class Producer;
 class Profile;
 class Tractor;
+class Transition;
 } // namespace Mlt
 
 namespace Thrive {
@@ -50,6 +52,10 @@ public:
     /// The most recently built tractor.  May be nullptr before the first build.
     [[nodiscard]] Mlt::Tractor *tractor() const { return m_tractor.get(); }
 
+    /// Serialize the current Mlt::Tractor to MLT XML.  Returns an empty
+    /// QByteArray if no tractor has been built yet.
+    [[nodiscard]] QByteArray serializeToXml() const;
+
 signals:
     /// Emitted after a successful rebuild().
     void tractorReady(Mlt::Tractor *tractor);
@@ -69,9 +75,10 @@ private:
     std::unique_ptr<Mlt::Tractor> m_tractor;
 
     // Keep producers alive for the lifetime of the tractor
-    std::vector<std::unique_ptr<Mlt::Producer>>  m_producers;
-    std::vector<std::unique_ptr<Mlt::Playlist>>  m_playlists;
-    std::vector<std::unique_ptr<Mlt::Filter>>    m_filters;
+    std::vector<std::unique_ptr<Mlt::Producer>>    m_producers;
+    std::vector<std::unique_ptr<Mlt::Playlist>>    m_playlists;
+    std::vector<std::unique_ptr<Mlt::Filter>>      m_filters;
+    std::vector<std::unique_ptr<Mlt::Transition>>  m_transitions;
 };
 
 } // namespace Thrive

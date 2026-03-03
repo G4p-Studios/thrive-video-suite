@@ -8,6 +8,7 @@
 #include "../core/track.h"
 #include "../core/clip.h"
 #include "../core/effect.h"
+#include "../core/transition.h"
 #include "../core/timecode.h"
 
 #include <mlt++/MltFactory.h>
@@ -16,6 +17,12 @@
 #include <mlt++/MltProducer.h>
 #include <mlt++/MltProfile.h>
 #include <mlt++/MltTractor.h>
+#include <mlt++/MltTransition.h>
+
+#include <mlt++/MltConsumer.h>
+
+#include <QTemporaryFile>
+#include <QFile>
 
 #include <algorithm>
 
@@ -43,6 +50,7 @@ bool TractorBuilder::rebuild(Timeline *timeline)
     m_producers.clear();
     m_playlists.clear();
     m_filters.clear();
+    m_transitions.clear();
 
     auto *profile = m_engine->compositionProfile();
 
@@ -74,6 +82,41 @@ bool TractorBuilder::rebuild(Timeline *timeline)
 
     emit tractorReady(m_tractor.get());
     return true;
+}
+
+// ---------------------------------------------------------------------------
+// serializeToXml – export current Tractor as MLT XML
+// ---------------------------------------------------------------------------
+
+QByteArray TractorBuilder::serializeToXml() const
+{
+    if (!m_tractor || !m_engine || !m_engine->isInitialized())
+        return QByteArray();
+
+    auto *profile = m_engine->compositionProfile();
+
+    // Use a temporary file because the MLT XML consumer writes to a resource
+    QTemporaryFile tmpFile;
+    tmpFile.setAutoRemove(true);
+    if (!tmpFile.open())
+        return QByteArray();
+
+    const QByteArray tmpPath = tmpFile.fileName().toUtf8();
+    tmpFile.close();
+
+    Mlt::Consumer xmlConsumer(*profile, "xml", tmpPath.constData());
+    if (!xmlConsumer.is_valid())
+        return QByteArray();
+
+    xmlConsumer.set("no_meta", 1);
+    xmlConsumer.connect(*m_tractor);
+    xmlConsumer.run();
+
+    QFile f(QString::fromUtf8(tmpPath));
+    if (!f.open(QIODevice::ReadOnly))
+        return QByteArray();
+
+    return f.readAll();
 }
 
 // ---------------------------------------------------------------------------
@@ -133,6 +176,67 @@ std::unique_ptr<Mlt::Playlist> TractorBuilder::buildPlaylist(Track *track)
 
         // Keep producer alive
         m_producers.push_back(std::move(producer));
+    }
+
+    // ── Apply within-playlist transitions (mix) ──────────────────────
+    // Walk the sorted clips looking for outTransition on clip N or
+    // inTransition on clip N+1.  When found, use Playlist::mix() to
+    // create an overlap region, then attach an Mlt::Transition to it.
+    // mix() merges the two playlist entries at the given clip index,
+    // so we process from the end to avoid index shifts.
+    {
+        // Build a list of (playlistClipIndex, duration, serviceId) for each
+        // transition.  playlist clip indices correspond to the sorted order
+        // but we must account for blanks inserted earlier.  We track the
+        // playlist clip index as we go.
+        struct MixInfo { int playlistClipIdx; int durationFrames; QString serviceId; };
+        QVector<MixInfo> mixes;
+
+        // Map sortedClips index → playlist clip index (blanks shift indices)
+        int pIdx = 0; // running playlist clip index
+        QVector<int> clipPlaylistIdx;
+        int64_t curFrame = 0;
+        for (int i = 0; i < sortedClips.size(); ++i) {
+            const int64_t cs = sortedClips[i]->timelinePosition().frame();
+            if (cs > curFrame)
+                ++pIdx; // there was a blank entry before this clip
+            clipPlaylistIdx.append(pIdx);
+            const int in  = static_cast<int>(sortedClips[i]->inPoint().frame());
+            const int out = static_cast<int>(sortedClips[i]->outPoint().frame());
+            curFrame = cs + (out - in + 1);
+            ++pIdx;
+        }
+
+        for (int i = 0; i + 1 < sortedClips.size(); ++i) {
+            Transition *trans = sortedClips[i]->outTransition();
+            if (!trans)
+                trans = sortedClips[i + 1]->inTransition();
+            if (!trans)
+                continue;
+
+            MixInfo mi;
+            mi.playlistClipIdx = clipPlaylistIdx[i];
+            mi.durationFrames  = static_cast<int>(trans->duration().frame());
+            mi.serviceId       = trans->serviceId();
+            if (mi.durationFrames <= 0)
+                continue;
+            mixes.append(mi);
+        }
+
+        // Apply mixes from the end so earlier indices stay valid
+        for (int m = mixes.size() - 1; m >= 0; --m) {
+            const auto &mi = mixes[m];
+            auto mltTrans = std::make_unique<Mlt::Transition>(
+                *profile, mi.serviceId.toUtf8().constData());
+            if (!mltTrans->is_valid())
+                continue;
+
+            // Playlist::mix() accepts an optional Transition* to apply
+            // to the mix region it creates.
+            playlist->mix(mi.playlistClipIdx, mi.durationFrames,
+                          mltTrans.get());
+            m_transitions.push_back(std::move(mltTrans));
+        }
     }
 
     // Track-level effects → attach as filters on the entire playlist

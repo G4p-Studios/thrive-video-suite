@@ -107,10 +107,11 @@ private:
     QAction *m_actSelectAll   = nullptr;
 
     // Timeline menu actions
-    QAction *m_actSplitClip    = nullptr;
-    QAction *m_actAddTrack     = nullptr;
-    QAction *m_actRemoveTrack  = nullptr;
-    QAction *m_actAddMarker    = nullptr;
+    QAction *m_actSplitClip      = nullptr;
+    QAction *m_actAddTrack       = nullptr;
+    QAction *m_actRemoveTrack    = nullptr;
+    QAction *m_actAddMarker      = nullptr;
+    QAction *m_actAddTransition  = nullptr;
 };
 
 } // namespace Thrive

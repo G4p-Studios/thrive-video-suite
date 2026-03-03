@@ -156,6 +156,7 @@ QByteArray ProjectSerializer::buildMetadataJson(const Project *project) const
             cObj[QStringLiteral("source")]      = clip->sourcePath();
             cObj[QStringLiteral("in")]          = clip->inPoint().toString();
             cObj[QStringLiteral("out")]         = clip->outPoint().toString();
+            cObj[QStringLiteral("timelinePosition")] = clip->timelinePosition().toString();
 
             QJsonArray effectsArr;
             for (const auto *effect : clip->effects()) {
@@ -239,6 +240,8 @@ bool ProjectSerializer::applyMetadataJson(Project *project,
                 TimeCode::fromString(cObj[QStringLiteral("in")].toString(), fps),
                 TimeCode::fromString(cObj[QStringLiteral("out")].toString(), fps));
             clip->setDescription(cObj[QStringLiteral("description")].toString());
+            clip->setTimelinePosition(
+                TimeCode::fromString(cObj[QStringLiteral("timelinePosition")].toString(), fps));
 
             const auto effectsArr = cObj[QStringLiteral("effects")].toArray();
             for (const auto &eVal : effectsArr) {
@@ -277,19 +280,26 @@ bool ProjectSerializer::applyMetadataJson(Project *project,
 }
 
 // ---------------------------------------------------------------------------
-// MLT XML (stub – real implementation delegates to MltEngine)
+// MLT XML – uses cached XML from TractorBuilder::serializeToXml()
 // ---------------------------------------------------------------------------
 QByteArray ProjectSerializer::buildMltXml(const Project * /*project*/) const
 {
-    // TODO: Delegate to MltEngine to serialize the live Mlt::Tractor to XML
-    //       via Mlt::Consumer with "xml" target.
+    // Return the cached MLT XML if the caller supplied one via setMltXml().
+    // This XML is produced by TractorBuilder::serializeToXml() which uses
+    // the MLT "xml" consumer to serialise the live Mlt::Tractor.
+    if (!m_cachedMltXml.isEmpty())
+        return m_cachedMltXml;
+
+    // Fallback: minimal valid MLT XML so the file is still well-formed.
     return QByteArrayLiteral("<?xml version=\"1.0\"?>\n<mlt/>\n");
 }
 
 bool ProjectSerializer::applyMltXml(Project * /*project*/,
                                      const QByteArray & /*xml*/)
 {
-    // TODO: Delegate to MltEngine to deserialize XML via Mlt::Producer("xml-string")
+    // The metadata.json is the authoritative data source.  After loading,
+    // MainWindow calls rebuildTractor() which recreates the MLT pipeline
+    // from the Timeline model, so we don't need to parse the MLT XML here.
     return true;
 }
 

@@ -14,6 +14,7 @@
 #include "../core/marker.h"
 #include "../core/commands.h"
 #include "../core/projectserializer.h"
+#include "../core/transition.h"
 #include "../engine/mltengine.h"
 #include "../engine/playbackcontroller.h"
 #include "../engine/renderengine.h"
@@ -197,6 +198,9 @@ void MainWindow::saveProject()
         saveProjectAs();
         return;
     }
+
+    // Serialize the live MLT tractor to XML before writing the file
+    m_serializer->setMltXml(m_tractorBuilder->serializeToXml());
 
     if (!m_serializer->save(m_project, m_currentFilePath)) {
         QMessageBox::warning(this, tr("Save Failed"),
@@ -536,6 +540,55 @@ void MainWindow::createActions()
             Announcer::Priority::High);
     });
 
+    // ── Add Transition ──────────────────────────────────────────
+    m_actAddTransition = new QAction(tr("Add &Transition to Clip…"), this);
+    connect(m_actAddTransition, &QAction::triggered, this, [this]() {
+        auto *tl  = m_project->timeline();
+        auto *trk = tl->trackAt(tl->currentTrackIndex());
+        int   idx = tl->currentClipIndex();
+        if (!trk || idx < 0 || idx >= trk->clipCount()) {
+            m_announcer->announce(tr("Select a clip first."),
+                                  Announcer::Priority::Normal);
+            return;
+        }
+
+        QStringList types;
+        types << tr("luma (Cross Dissolve)")
+              << tr("mix (Audio Cross-fade)");
+        bool ok = false;
+        const QString chosen = QInputDialog::getItem(
+            this, tr("Add Transition"), tr("Transition type:"),
+            types, 0, false, &ok);
+        if (!ok) return;
+
+        bool durationOk = false;
+        const double seconds = QInputDialog::getDouble(
+            this, tr("Transition Duration"),
+            tr("Duration in seconds:"), 1.0, 0.1, 30.0, 1, &durationOk);
+        if (!durationOk) return;
+
+        const QString serviceId = chosen.startsWith(tr("luma"))
+                                      ? QStringLiteral("luma")
+                                      : QStringLiteral("mix");
+        const int frames = static_cast<int>(seconds * m_project->fps());
+        auto *trans = new Transition(
+            serviceId,
+            chosen.section(QLatin1Char('('), 1).chopped(1).trimmed(),
+            QString(),
+            TimeCode(frames, m_project->fps()));
+
+        auto *clip = trk->clipAt(idx);
+        m_undoStack->push(new AddTransitionCommand(
+            clip, AddTransitionCommand::Edge::Out, trans));
+        rebuildTractor();
+        m_announcer->announce(
+            tr("Added %1 transition (%2s) to %3.")
+                .arg(serviceId)
+                .arg(seconds, 0, 'f', 1)
+                .arg(clip->name()),
+            Announcer::Priority::High);
+    });
+
     connect(m_actNew,   &QAction::triggered, this, &MainWindow::newProject);
     connect(m_actOpen,  &QAction::triggered, this, &MainWindow::openProject);
     connect(m_actSave,  &QAction::triggered, this, &MainWindow::saveProject);
@@ -580,6 +633,8 @@ void MainWindow::createMenus()
     timelineMenu->addAction(m_actRemoveTrack);
     timelineMenu->addSeparator();
     timelineMenu->addAction(m_actAddMarker);
+    timelineMenu->addSeparator();
+    timelineMenu->addAction(m_actAddTransition);
 
     auto *helpMenu = menuBar()->addMenu(tr("&Help"));
     helpMenu->addAction(m_actWizard);
@@ -608,10 +663,14 @@ void MainWindow::createDockWidgets()
     addDockWidget(Qt::LeftDockWidgetArea, mediaDock);
 
     // Properties panel (right)
-    m_properties = new PropertiesPanel(m_announcer, this);
+    m_properties = new PropertiesPanel(m_announcer, m_undoStack, this);
     auto *propDock = new QDockWidget(tr("Properties"), this);
     propDock->setWidget(m_properties);
     addDockWidget(Qt::RightDockWidgetArea, propDock);
+
+    // Rebuild tractor when a clip is trimmed from the properties panel
+    connect(m_properties, &PropertiesPanel::clipTrimmed,
+            this, &MainWindow::rebuildTractor);
 
     // Effects browser (right, tabbed with properties)
     m_effects = new EffectsBrowser(m_catalog, m_announcer, this);
@@ -748,6 +807,8 @@ void MainWindow::registerShortcuts()
                       QKeySequence(QStringLiteral("Shift+Delete")));
     sm.registerAction(QStringLiteral("timeline.addMarker"), m_actAddMarker,
                       QKeySequence(QStringLiteral("Shift+M")));
+    sm.registerAction(QStringLiteral("timeline.addTransition"), m_actAddTransition,
+                      QKeySequence(QStringLiteral("Shift+T")));
 }
 
 void MainWindow::rebuildTractor()

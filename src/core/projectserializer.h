@@ -24,6 +24,10 @@ public:
     /// Load project from a .tvs file. Returns true on success.
     [[nodiscard]] bool load(Project *project, const QString &filePath);
 
+    /// Store MLT XML data to be included in the next save.
+    /// Call this before save() with the output of TractorBuilder::serializeToXml().
+    void setMltXml(const QByteArray &xml) { m_cachedMltXml = xml; }
+
     /// Last error message (if save/load failed).
     [[nodiscard]] QString lastError() const { return m_lastError; }
 
@@ -38,7 +42,8 @@ private:
     [[nodiscard]] QByteArray buildMltXml(const Project *project) const;
     bool applyMltXml(Project *project, const QByteArray &xml);
 
-    QString m_lastError;
+    QString    m_lastError;
+    QByteArray m_cachedMltXml;
 };
 
 } // namespace Thrive

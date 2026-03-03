@@ -13,6 +13,7 @@ class Timeline;
 class Track;
 class Clip;
 class Effect;
+class Transition;
 
 // ---------------------------------------------------------------------------
 // AddClipCommand
@@ -215,6 +216,45 @@ private:
     QString   m_name;
     TimeCode  m_position;
     QString   m_comment;
+};
+
+// ---------------------------------------------------------------------------
+// AddTransitionCommand – sets a transition on a clip's in or out edge
+// ---------------------------------------------------------------------------
+class AddTransitionCommand : public QUndoCommand
+{
+public:
+    enum class Edge { In, Out };
+
+    AddTransitionCommand(Clip *clip, Edge edge, Transition *transition,
+                         QUndoCommand *parent = nullptr);
+    void undo() override;
+    void redo() override;
+
+private:
+    Clip       *m_clip;
+    Edge        m_edge;
+    Transition *m_transition;
+    Transition *m_oldTransition = nullptr;
+};
+
+// ---------------------------------------------------------------------------
+// RemoveTransitionCommand – removes a transition from a clip edge
+// ---------------------------------------------------------------------------
+class RemoveTransitionCommand : public QUndoCommand
+{
+public:
+    using Edge = AddTransitionCommand::Edge;
+
+    RemoveTransitionCommand(Clip *clip, Edge edge,
+                            QUndoCommand *parent = nullptr);
+    void undo() override;
+    void redo() override;
+
+private:
+    Clip       *m_clip;
+    Edge        m_edge;
+    Transition *m_transition = nullptr;
 };
 
 } // namespace Thrive
