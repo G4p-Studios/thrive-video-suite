@@ -61,6 +61,8 @@ private:
     void rebuildTractor();
     void reconnectTimeline();
     void updateWindowTitle();
+    void addRecentProject(const QString &path);
+    void updateRecentMenu();
 
     // Owned subsystems
     Project            *m_project   = nullptr;
@@ -125,6 +127,13 @@ private:
     // Quick-access actions
     QAction *m_actFocusMedia     = nullptr;
     QAction *m_actFocusEffects   = nullptr;
+
+    // Track reorder actions
+    QAction *m_actMoveTrackUp    = nullptr;
+    QAction *m_actMoveTrackDown  = nullptr;
+
+    // Recent projects
+    QMenu   *m_recentMenu        = nullptr;
 };
 
 } // namespace Thrive

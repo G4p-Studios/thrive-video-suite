@@ -170,6 +170,23 @@ void SplitClipCommand::redo()
         m_splitPoint,
         m_originalOut);
 
+    // Deep-copy effects from original to new clip
+    for (auto *fx : original->effects()) {
+        auto *copy = new Effect(fx->serviceId(), fx->displayName(),
+                                fx->description(), m_newClip);
+        for (const auto &p : fx->parameters())
+            copy->addParameter(p);
+        copy->setEnabled(fx->isEnabled());
+        m_newClip->addEffect(copy);
+    }
+
+    // Move the original's outTransition to the new clip (it is now the
+    // clip that borders the next clip)
+    if (original->outTransition()) {
+        m_newClip->setOutTransition(original->outTransition());
+        original->setOutTransition(nullptr);
+    }
+
     // Trim original to end at split point
     original->setOutPoint(m_splitPoint);
 
@@ -425,6 +442,127 @@ void RemoveTransitionCommand::redo()
         m_clip->setInTransition(nullptr);
     else
         m_clip->setOutTransition(nullptr);
+}
+
+// ===========================================================================
+// RenameClipCommand
+// ===========================================================================
+RenameClipCommand::RenameClipCommand(Clip *clip, const QString &newName,
+                                     QUndoCommand *parent)
+    : QUndoCommand(parent)
+    , m_clip(clip)
+    , m_oldName(clip->name())
+    , m_newName(newName)
+{
+    setText(QObject::tr("Rename clip \"%1\"").arg(newName));
+}
+
+void RenameClipCommand::undo()  { m_clip->setName(m_oldName); }
+void RenameClipCommand::redo()  { m_clip->setName(m_newName); }
+
+// ===========================================================================
+// ChangeClipDescriptionCommand
+// ===========================================================================
+ChangeClipDescriptionCommand::ChangeClipDescriptionCommand(
+        Clip *clip, const QString &newDesc, QUndoCommand *parent)
+    : QUndoCommand(parent)
+    , m_clip(clip)
+    , m_oldDesc(clip->description())
+    , m_newDesc(newDesc)
+{
+    setText(QObject::tr("Edit clip description"));
+}
+
+void ChangeClipDescriptionCommand::undo()  { m_clip->setDescription(m_oldDesc); }
+void ChangeClipDescriptionCommand::redo()  { m_clip->setDescription(m_newDesc); }
+
+// ===========================================================================
+// ChangeEffectParameterCommand
+// ===========================================================================
+ChangeEffectParameterCommand::ChangeEffectParameterCommand(
+        Effect *effect, const QString &paramId,
+        const QVariant &newValue, QUndoCommand *parent)
+    : QUndoCommand(parent)
+    , m_effect(effect)
+    , m_paramId(paramId)
+    , m_oldValue(effect->parameterValue(paramId))
+    , m_newValue(newValue)
+{
+    setText(QObject::tr("Change parameter \"%1\"").arg(paramId));
+}
+
+void ChangeEffectParameterCommand::undo()
+{
+    m_effect->setParameterValue(m_paramId, m_oldValue);
+}
+
+void ChangeEffectParameterCommand::redo()
+{
+    m_effect->setParameterValue(m_paramId, m_newValue);
+}
+
+// ===========================================================================
+// SetEffectEnabledCommand
+// ===========================================================================
+SetEffectEnabledCommand::SetEffectEnabledCommand(
+        Effect *effect, bool enabled, QUndoCommand *parent)
+    : QUndoCommand(parent)
+    , m_effect(effect)
+    , m_oldEnabled(effect->isEnabled())
+    , m_newEnabled(enabled)
+{
+    setText(enabled ? QObject::tr("Enable effect \"%1\"").arg(effect->displayName())
+                    : QObject::tr("Disable effect \"%1\"").arg(effect->displayName()));
+}
+
+void SetEffectEnabledCommand::undo()  { m_effect->setEnabled(m_oldEnabled); }
+void SetEffectEnabledCommand::redo()  { m_effect->setEnabled(m_newEnabled); }
+
+// ===========================================================================
+// MoveTrackCommand
+// ===========================================================================
+MoveTrackCommand::MoveTrackCommand(Timeline *timeline, int fromIndex,
+                                   int toIndex, QUndoCommand *parent)
+    : QUndoCommand(parent)
+    , m_timeline(timeline)
+    , m_from(fromIndex)
+    , m_to(toIndex)
+{
+    setText(QObject::tr("Move track"));
+}
+
+void MoveTrackCommand::undo()  { m_timeline->moveTrack(m_to, m_from); }
+void MoveTrackCommand::redo()  { m_timeline->moveTrack(m_from, m_to); }
+
+// ===========================================================================
+// MoveClipBetweenTracksCommand
+// ===========================================================================
+MoveClipBetweenTracksCommand::MoveClipBetweenTracksCommand(
+        Track *srcTrack, int clipIndex,
+        Track *dstTrack, int dstIndex, QUndoCommand *parent)
+    : QUndoCommand(parent)
+    , m_srcTrack(srcTrack)
+    , m_dstTrack(dstTrack)
+    , m_srcIndex(clipIndex)
+    , m_dstIndex(dstIndex < 0 ? dstTrack->clipCount() : dstIndex)
+{
+    m_clip = srcTrack->clipAt(clipIndex);
+    if (m_clip)
+        setText(QObject::tr("Move clip \"%1\" between tracks").arg(m_clip->name()));
+}
+
+void MoveClipBetweenTracksCommand::undo()
+{
+    if (!m_clip) return;
+    m_dstTrack->removeClip(m_dstIndex);
+    m_srcTrack->insertClip(m_srcIndex, m_clip);
+}
+
+void MoveClipBetweenTracksCommand::redo()
+{
+    if (!m_clip) return;
+    m_srcTrack->removeClip(m_srcIndex);
+    m_dstTrack->insertClip(m_dstIndex, m_clip);
 }
 
 } // namespace Thrive

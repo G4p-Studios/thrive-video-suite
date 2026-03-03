@@ -122,6 +122,11 @@ MainWindow::MainWindow(Project *project,
 
     // First-run wizard
     checkFirstRun();
+
+    // Restore window geometry and dock layout from previous session
+    QSettings geo;
+    restoreGeometry(geo.value(QStringLiteral("mainwindow/geometry")).toByteArray());
+    restoreState(geo.value(QStringLiteral("mainwindow/state")).toByteArray());
 }
 
 // ── close ────────────────────────────────────────────────────────────
@@ -141,6 +146,12 @@ void MainWindow::closeEvent(QCloseEvent *event)
             return;
         }
     }
+
+    // Persist window geometry and dock layout
+    QSettings s;
+    s.setValue(QStringLiteral("mainwindow/geometry"), saveGeometry());
+    s.setValue(QStringLiteral("mainwindow/state"),    saveState());
+
     event->accept();
 }
 
@@ -188,6 +199,7 @@ void MainWindow::openProject()
     rebuildTractor();
     m_timeline->refresh();
     updateWindowTitle();
+    addRecentProject(path);
     m_announcer->announce(
         tr("Project opened: %1").arg(path), Announcer::Priority::High);
 }
@@ -211,6 +223,7 @@ void MainWindow::saveProject()
     m_modified = false;
     m_project->setModified(false);
     updateWindowTitle();
+    addRecentProject(m_currentFilePath);
     m_announcer->announce(tr("Project saved."), Announcer::Priority::Normal);
 }
 
@@ -684,6 +697,43 @@ void MainWindow::createActions()
         m_announcer->announce(tr("Effects browser"),
                               Announcer::Priority::Normal);
     });
+
+    // ── Move track up / down ──────────────────────────────────────────
+    m_actMoveTrackUp = new QAction(tr("Move Track &Up"), this);
+    connect(m_actMoveTrackUp, &QAction::triggered, this, [this]() {
+        auto *tl = m_project->timeline();
+        int idx = tl->currentTrackIndex();
+        if (idx <= 0) {
+            m_announcer->announce(tr("Already the first track."),
+                                  Announcer::Priority::Normal);
+            return;
+        }
+        m_undoStack->push(new MoveTrackCommand(tl, idx, idx - 1));
+        tl->setCurrentTrackIndex(idx - 1);
+        m_modified = true;
+        m_timeline->refresh();
+        m_announcer->announce(
+            tr("%1 moved up.").arg(tl->trackAt(idx - 1)->name()),
+            Announcer::Priority::High);
+    });
+
+    m_actMoveTrackDown = new QAction(tr("Move Track &Down"), this);
+    connect(m_actMoveTrackDown, &QAction::triggered, this, [this]() {
+        auto *tl = m_project->timeline();
+        int idx = tl->currentTrackIndex();
+        if (idx < 0 || idx >= tl->trackCount() - 1) {
+            m_announcer->announce(tr("Already the last track."),
+                                  Announcer::Priority::Normal);
+            return;
+        }
+        m_undoStack->push(new MoveTrackCommand(tl, idx, idx + 1));
+        tl->setCurrentTrackIndex(idx + 1);
+        m_modified = true;
+        m_timeline->refresh();
+        m_announcer->announce(
+            tr("%1 moved down.").arg(tl->trackAt(idx + 1)->name()),
+            Announcer::Priority::High);
+    });
 }
 
 void MainWindow::createMenus()
@@ -691,6 +741,9 @@ void MainWindow::createMenus()
     auto *fileMenu = menuBar()->addMenu(tr("&File"));
     fileMenu->addAction(m_actNew);
     fileMenu->addAction(m_actOpen);
+    m_recentMenu = fileMenu->addMenu(tr("Recent &Projects"));
+    m_recentMenu->setAccessibleName(tr("Recent projects"));
+    updateRecentMenu();
     fileMenu->addSeparator();
     fileMenu->addAction(m_actSave);
     fileMenu->addAction(m_actSaveAs);
@@ -724,6 +777,9 @@ void MainWindow::createMenus()
     timelineMenu->addSeparator();
     timelineMenu->addAction(m_actMuteTrack);
     timelineMenu->addAction(m_actLockTrack);
+    timelineMenu->addSeparator();
+    timelineMenu->addAction(m_actMoveTrackUp);
+    timelineMenu->addAction(m_actMoveTrackDown);
 
     auto *transportMenu = menuBar()->addMenu(tr("T&ransport"));
     transportMenu->addAction(m_actPlayPause);
@@ -939,6 +995,12 @@ void MainWindow::registerShortcuts()
                       QKeySequence(QStringLiteral("Ctrl+I")));
     sm.registerAction(QStringLiteral("view.focusEffects"), m_actFocusEffects,
                       QKeySequence(QStringLiteral("Ctrl+E")));
+
+    // Track reorder
+    sm.registerAction(QStringLiteral("timeline.moveTrackUp"), m_actMoveTrackUp,
+                      QKeySequence(QStringLiteral("Alt+Up")));
+    sm.registerAction(QStringLiteral("timeline.moveTrackDown"), m_actMoveTrackDown,
+                      QKeySequence(QStringLiteral("Alt+Down")));
 }
 
 void MainWindow::rebuildTractor()
@@ -993,6 +1055,65 @@ void MainWindow::checkPostRestartPlugins()
         m_announcer->announce(
             tr("Plugins updated. Changes are now active."),
             Announcer::Priority::High);
+    }
+}
+
+void MainWindow::addRecentProject(const QString &path)
+{
+    QSettings s;
+    QStringList recent = s.value(QStringLiteral("recentProjects")).toStringList();
+    recent.removeAll(path);
+    recent.prepend(path);
+    while (recent.size() > 10)
+        recent.removeLast();
+    s.setValue(QStringLiteral("recentProjects"), recent);
+    updateRecentMenu();
+}
+
+void MainWindow::updateRecentMenu()
+{
+    if (!m_recentMenu) return;
+    m_recentMenu->clear();
+
+    QSettings s;
+    const QStringList recent =
+        s.value(QStringLiteral("recentProjects")).toStringList();
+
+    if (recent.isEmpty()) {
+        auto *empty = m_recentMenu->addAction(tr("(none)"));
+        empty->setEnabled(false);
+        return;
+    }
+
+    for (const QString &filePath : recent) {
+        const QString label = QFileInfo(filePath).fileName();
+        auto *act = m_recentMenu->addAction(label);
+        act->setData(filePath);
+        connect(act, &QAction::triggered, this, [this, filePath]() {
+            if (!QFileInfo::exists(filePath)) {
+                m_announcer->announce(
+                    tr("File not found: %1").arg(filePath),
+                    Announcer::Priority::High);
+                return;
+            }
+            m_playback->close();
+            if (!m_serializer->load(m_project, filePath)) {
+                QMessageBox::warning(this, tr("Open Failed"),
+                                     m_serializer->lastError());
+                return;
+            }
+            m_currentFilePath = filePath;
+            m_modified = false;
+            m_undoStack->clear();
+            reconnectTimeline();
+            rebuildTractor();
+            m_timeline->refresh();
+            updateWindowTitle();
+            addRecentProject(filePath);
+            m_announcer->announce(
+                tr("Project opened: %1").arg(filePath),
+                Announcer::Priority::High);
+        });
     }
 }
 

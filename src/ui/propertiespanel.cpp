@@ -198,7 +198,9 @@ void PropertiesPanel::clear()
 void PropertiesPanel::onClipNameEdited()
 {
     if (m_currentClip) {
-        m_currentClip->setName(m_clipName->text());
+        const QString newName = m_clipName->text();
+        if (newName != m_currentClip->name())
+            m_undoStack->push(new RenameClipCommand(m_currentClip, newName));
     } else if (m_currentTrack) {
         m_currentTrack->setName(m_clipName->text());
     }
@@ -207,8 +209,10 @@ void PropertiesPanel::onClipNameEdited()
 void PropertiesPanel::onClipDescriptionEdited()
 {
     if (m_currentClip) {
-        m_currentClip->setDescription(
-            m_clipDescription->toPlainText());
+        const QString newDesc = m_clipDescription->toPlainText();
+        if (newDesc != m_currentClip->description())
+            m_undoStack->push(
+                new ChangeClipDescriptionCommand(m_currentClip, newDesc));
     }
 }
 
@@ -319,7 +323,11 @@ void PropertiesPanel::populateEffects(const QVector<Effect *> &effects)
             tr("%1 enabled").arg(effect->displayName()));
         cardLayout->addRow(enabledCb);
         connect(enabledCb, &QCheckBox::toggled,
-                effect, &Effect::setEnabled);
+                this, [this, effect](bool checked) {
+                    if (checked != effect->isEnabled())
+                        m_undoStack->push(
+                            new SetEffectEnabledCommand(effect, checked));
+                });
 
         // Parameter widgets
         for (const auto &param : effect->parameters()) {
@@ -340,8 +348,10 @@ void PropertiesPanel::populateEffects(const QVector<Effect *> &effects)
 
                 const QString paramId = param.id;
                 connect(spin, &QDoubleSpinBox::valueChanged,
-                        this, [effect, paramId](double v) {
-                            effect->setParameterValue(paramId, v);
+                        this, [this, effect, paramId](double v) {
+                            m_undoStack->push(
+                                new ChangeEffectParameterCommand(
+                                    effect, paramId, v));
                         });
                 cardLayout->addRow(param.displayName + QStringLiteral(":"),
                                    spin);
@@ -359,8 +369,10 @@ void PropertiesPanel::populateEffects(const QVector<Effect *> &effects)
 
                 const QString paramId = param.id;
                 connect(spin, &QSpinBox::valueChanged,
-                        this, [effect, paramId](int v) {
-                            effect->setParameterValue(paramId, v);
+                        this, [this, effect, paramId](int v) {
+                            m_undoStack->push(
+                                new ChangeEffectParameterCommand(
+                                    effect, paramId, v));
                         });
                 cardLayout->addRow(param.displayName + QStringLiteral(":"),
                                    spin);
@@ -372,8 +384,10 @@ void PropertiesPanel::populateEffects(const QVector<Effect *> &effects)
 
                 const QString paramId = param.id;
                 connect(cb, &QCheckBox::toggled,
-                        this, [effect, paramId](bool v) {
-                            effect->setParameterValue(paramId, v);
+                        this, [this, effect, paramId](bool v) {
+                            m_undoStack->push(
+                                new ChangeEffectParameterCommand(
+                                    effect, paramId, v));
                         });
                 cardLayout->addRow(cb);
 
@@ -385,8 +399,10 @@ void PropertiesPanel::populateEffects(const QVector<Effect *> &effects)
 
                 const QString paramId = param.id;
                 connect(edit, &QLineEdit::editingFinished,
-                        this, [effect, paramId, edit]() {
-                            effect->setParameterValue(paramId, edit->text());
+                        this, [this, effect, paramId, edit]() {
+                            m_undoStack->push(
+                                new ChangeEffectParameterCommand(
+                                    effect, paramId, edit->text()));
                         });
                 cardLayout->addRow(param.displayName + QStringLiteral(":"),
                                    edit);

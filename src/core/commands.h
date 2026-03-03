@@ -5,6 +5,7 @@
 
 #include <QUndoCommand>
 #include <QString>
+#include <QVariant>
 #include "timecode.h"
 
 namespace Thrive {
@@ -255,6 +256,113 @@ private:
     Clip       *m_clip;
     Edge        m_edge;
     Transition *m_transition = nullptr;
+};
+
+// ---------------------------------------------------------------------------
+// RenameClipCommand – undoable clip name change
+// ---------------------------------------------------------------------------
+class RenameClipCommand : public QUndoCommand
+{
+public:
+    RenameClipCommand(Clip *clip, const QString &newName,
+                      QUndoCommand *parent = nullptr);
+    void undo() override;
+    void redo() override;
+
+private:
+    Clip    *m_clip;
+    QString  m_oldName;
+    QString  m_newName;
+};
+
+// ---------------------------------------------------------------------------
+// ChangeClipDescriptionCommand
+// ---------------------------------------------------------------------------
+class ChangeClipDescriptionCommand : public QUndoCommand
+{
+public:
+    ChangeClipDescriptionCommand(Clip *clip, const QString &newDesc,
+                                 QUndoCommand *parent = nullptr);
+    void undo() override;
+    void redo() override;
+
+private:
+    Clip    *m_clip;
+    QString  m_oldDesc;
+    QString  m_newDesc;
+};
+
+// ---------------------------------------------------------------------------
+// ChangeEffectParameterCommand – undoable effect parameter edit
+// ---------------------------------------------------------------------------
+class ChangeEffectParameterCommand : public QUndoCommand
+{
+public:
+    ChangeEffectParameterCommand(Effect *effect, const QString &paramId,
+                                 const QVariant &newValue,
+                                 QUndoCommand *parent = nullptr);
+    void undo() override;
+    void redo() override;
+
+private:
+    Effect  *m_effect;
+    QString  m_paramId;
+    QVariant m_oldValue;
+    QVariant m_newValue;
+};
+
+// ---------------------------------------------------------------------------
+// SetEffectEnabledCommand – undoable effect toggle
+// ---------------------------------------------------------------------------
+class SetEffectEnabledCommand : public QUndoCommand
+{
+public:
+    SetEffectEnabledCommand(Effect *effect, bool enabled,
+                            QUndoCommand *parent = nullptr);
+    void undo() override;
+    void redo() override;
+
+private:
+    Effect *m_effect;
+    bool    m_oldEnabled;
+    bool    m_newEnabled;
+};
+
+// ---------------------------------------------------------------------------
+// MoveTrackCommand – reorder tracks within the timeline
+// ---------------------------------------------------------------------------
+class MoveTrackCommand : public QUndoCommand
+{
+public:
+    MoveTrackCommand(Timeline *timeline, int fromIndex, int toIndex,
+                     QUndoCommand *parent = nullptr);
+    void undo() override;
+    void redo() override;
+
+private:
+    Timeline *m_timeline;
+    int       m_from;
+    int       m_to;
+};
+
+// ---------------------------------------------------------------------------
+// MoveClipBetweenTracksCommand – move a clip from one track to another
+// ---------------------------------------------------------------------------
+class MoveClipBetweenTracksCommand : public QUndoCommand
+{
+public:
+    MoveClipBetweenTracksCommand(Track *srcTrack, int clipIndex,
+                                 Track *dstTrack, int dstIndex = -1,
+                                 QUndoCommand *parent = nullptr);
+    void undo() override;
+    void redo() override;
+
+private:
+    Track *m_srcTrack;
+    Track *m_dstTrack;
+    Clip  *m_clip = nullptr;
+    int    m_srcIndex;
+    int    m_dstIndex;
 };
 
 } // namespace Thrive
