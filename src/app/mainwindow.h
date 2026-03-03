@@ -40,6 +40,7 @@ public:
 
 protected:
     void closeEvent(QCloseEvent *event) override;
+    bool event(QEvent *event) override;
 
 private slots:
     void newProject();

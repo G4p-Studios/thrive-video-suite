@@ -47,9 +47,13 @@
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QCloseEvent>
+#include <QKeyEvent>
 #include <QSettings>
 #include <QApplication>
 #include <QTimer>
+#include <QAbstractButton>
+#include <QComboBox>
+#include <QAbstractSpinBox>
 
 namespace Thrive {
 
@@ -147,6 +151,34 @@ MainWindow::MainWindow(Project *project,
 }
 
 // ── close ────────────────────────────────────────────────────────────
+
+// ---------------------------------------------------------------------------
+// Allow interactive widgets (buttons, combos, spin-boxes, check-boxes, etc.)
+// to handle Space / Enter / Return normally, even though those keys are
+// registered as global shortcuts (e.g. Play/Pause on Space).
+// Qt sends ShortcutOverride to the focused widget *before* matching a
+// shortcut.  If we accept the event here, the key press goes to the widget
+// instead of firing the shortcut.
+// ---------------------------------------------------------------------------
+bool MainWindow::event(QEvent *ev)
+{
+    if (ev->type() == QEvent::ShortcutOverride) {
+        auto *ke = static_cast<QKeyEvent *>(ev);
+        const int key = ke->key();
+        if (key == Qt::Key_Space || key == Qt::Key_Return ||
+            key == Qt::Key_Enter) {
+            QWidget *fw = QApplication::focusWidget();
+            if (fw && (qobject_cast<QAbstractButton *>(fw) ||
+                       qobject_cast<QComboBox *>(fw) ||
+                       qobject_cast<QAbstractSpinBox *>(fw) ||
+                       qobject_cast<QLineEdit *>(fw))) {
+                ev->accept();   // let the widget handle the key
+                return true;
+            }
+        }
+    }
+    return QMainWindow::event(ev);
+}
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
