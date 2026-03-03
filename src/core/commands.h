@@ -458,4 +458,34 @@ private:
     TimeCode    m_newDuration;
 };
 
+// ---------------------------------------------------------------------------
+// ToggleMuteTrackCommand – undoable track mute toggle
+// ---------------------------------------------------------------------------
+class ToggleMuteTrackCommand : public QUndoCommand
+{
+public:
+    explicit ToggleMuteTrackCommand(Track *track,
+                                    QUndoCommand *parent = nullptr);
+    void undo() override;
+    void redo() override;
+
+private:
+    Track *m_track;
+};
+
+// ---------------------------------------------------------------------------
+// ToggleLockTrackCommand – undoable track lock toggle
+// ---------------------------------------------------------------------------
+class ToggleLockTrackCommand : public QUndoCommand
+{
+public:
+    explicit ToggleLockTrackCommand(Track *track,
+                                    QUndoCommand *parent = nullptr);
+    void undo() override;
+    void redo() override;
+
+private:
+    Track *m_track;
+};
+
 } // namespace Thrive

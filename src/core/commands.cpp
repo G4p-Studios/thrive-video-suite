@@ -787,4 +787,48 @@ bool ChangeTransitionDurationCommand::mergeWith(const QUndoCommand *other)
     return true;
 }
 
+// =====================================================================
+// ToggleMuteTrackCommand
+// =====================================================================
+
+ToggleMuteTrackCommand::ToggleMuteTrackCommand(Track *track,
+                                                QUndoCommand *parent)
+    : QUndoCommand(parent)
+    , m_track(track)
+{
+    setText(QObject::tr("Toggle mute: %1").arg(track->name()));
+}
+
+void ToggleMuteTrackCommand::undo()
+{
+    m_track->setMuted(!m_track->isMuted());
+}
+
+void ToggleMuteTrackCommand::redo()
+{
+    m_track->setMuted(!m_track->isMuted());
+}
+
+// =====================================================================
+// ToggleLockTrackCommand
+// =====================================================================
+
+ToggleLockTrackCommand::ToggleLockTrackCommand(Track *track,
+                                                QUndoCommand *parent)
+    : QUndoCommand(parent)
+    , m_track(track)
+{
+    setText(QObject::tr("Toggle lock: %1").arg(track->name()));
+}
+
+void ToggleLockTrackCommand::undo()
+{
+    m_track->setLocked(!m_track->isLocked());
+}
+
+void ToggleLockTrackCommand::redo()
+{
+    m_track->setLocked(!m_track->isLocked());
+}
+
 } // namespace Thrive

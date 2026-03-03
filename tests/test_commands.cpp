@@ -818,6 +818,52 @@ private slots:
         QCOMPARE(m_track->clipAt(0)->outPoint().frame(), 120);
     }
 
+    // ── ToggleMuteTrackCommand ──────────────────────────────────────
+
+    void toggleMuteTrackUndoRedo()
+    {
+        QVERIFY(!m_track->isMuted());
+
+        m_stack->push(new ToggleMuteTrackCommand(m_track));
+        QVERIFY(m_track->isMuted());
+
+        m_stack->undo();
+        QVERIFY(!m_track->isMuted());
+
+        m_stack->redo();
+        QVERIFY(m_track->isMuted());
+
+        // Toggle again
+        m_stack->push(new ToggleMuteTrackCommand(m_track));
+        QVERIFY(!m_track->isMuted());
+
+        m_stack->undo();
+        QVERIFY(m_track->isMuted());
+    }
+
+    // ── ToggleLockTrackCommand ──────────────────────────────────────
+
+    void toggleLockTrackUndoRedo()
+    {
+        QVERIFY(!m_track->isLocked());
+
+        m_stack->push(new ToggleLockTrackCommand(m_track));
+        QVERIFY(m_track->isLocked());
+
+        m_stack->undo();
+        QVERIFY(!m_track->isLocked());
+
+        m_stack->redo();
+        QVERIFY(m_track->isLocked());
+
+        // Toggle again
+        m_stack->push(new ToggleLockTrackCommand(m_track));
+        QVERIFY(!m_track->isLocked());
+
+        m_stack->undo();
+        QVERIFY(m_track->isLocked());
+    }
+
 private:
     QUndoStack *m_stack    = nullptr;
     Timeline   *m_timeline = nullptr;

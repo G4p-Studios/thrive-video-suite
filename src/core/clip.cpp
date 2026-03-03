@@ -119,12 +119,13 @@ QString Clip::accessibleSummary() const
 {
     const auto dur = duration();
 
-    //: Screen reader summary for a clip. %1=name, %2=in timecode, %3=out timecode, %4=duration
-    QString summary = tr("Clip: %1, %2 to %3, duration %4")
+    //: Screen reader summary for a clip. %1=name, %2=in timecode, %3=out timecode, %4=duration, %5=timeline position
+    QString summary = tr("Clip: %1, %2 to %3, duration %4, at %5")
         .arg(m_name,
              m_inPoint.toString(),
              m_outPoint.toString(),
-             dur.toSpokenString());
+             dur.toSpokenString(),
+             m_timelinePos.toSpokenString());
 
     if (!m_effects.isEmpty()) {
         //: Number of effects applied to a clip

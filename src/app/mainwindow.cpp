@@ -497,6 +497,7 @@ void MainWindow::createActions()
 
         m_undoStack->push(new RemoveClipCommand(trk, idx));
         m_modified = true;
+        rebuildTractor();
         m_announcer->announce(
             tr("Cut: %1").arg(clipName), Announcer::Priority::Normal);
     });
@@ -593,6 +594,7 @@ void MainWindow::createActions()
 
         m_undoStack->push(new AddClipCommand(trk, newClip));
         m_modified = true;
+        rebuildTractor();
         m_announcer->announce(
             tr("Pasted: %1").arg(newClip->name()),
             Announcer::Priority::Normal);
@@ -617,6 +619,7 @@ void MainWindow::createActions()
         const QString name = trk->clipAt(idx)->name();
         m_undoStack->push(new RemoveClipCommand(trk, idx));
         m_modified = true;
+        rebuildTractor();
         m_announcer->announce(
             tr("Deleted: %1").arg(name), Announcer::Priority::Normal);
     });
@@ -653,6 +656,7 @@ void MainWindow::createActions()
             return;
         }
         m_undoStack->push(new SplitClipCommand(trk, idx, tl->playheadPosition()));
+        rebuildTractor();
         m_announcer->announce(tr("Clip split at playhead."),
                               Announcer::Priority::High);
     });
@@ -827,7 +831,7 @@ void MainWindow::createActions()
             trk, clipIdx, dst));
         tl->setCurrentTrackIndex(trkIdx - 1);
         m_modified = true;
-        m_timeline->refresh();
+        rebuildTractor();
         m_announcer->announce(
             tr("Clip moved to %1.").arg(dst->name()),
             Announcer::Priority::High);
@@ -868,7 +872,7 @@ void MainWindow::createActions()
             trk, clipIdx, dst));
         tl->setCurrentTrackIndex(trkIdx + 1);
         m_modified = true;
-        m_timeline->refresh();
+        rebuildTractor();
         m_announcer->announce(
             tr("Clip moved to %1.").arg(dst->name()),
             Announcer::Priority::High);
@@ -900,8 +904,11 @@ void MainWindow::createActions()
     m_actJRewind->setShortcut(Qt::Key_J);
     connect(m_actJRewind, &QAction::triggered, this, [this]() {
         m_playback->playReverse();
-        m_announcer->announce(tr("Rewinding"),
-                              Announcer::Priority::High);
+        const int absSpeed = static_cast<int>(qAbs(m_playback->speed()));
+        m_announcer->announce(
+            absSpeed > 1 ? tr("Rewinding %1x").arg(absSpeed)
+                         : tr("Rewinding"),
+            Announcer::Priority::High);
     });
     addAction(m_actJRewind);
 
@@ -909,8 +916,11 @@ void MainWindow::createActions()
     m_actLForward->setShortcut(Qt::Key_L);
     connect(m_actLForward, &QAction::triggered, this, [this]() {
         m_playback->playForward();
-        m_announcer->announce(tr("Fast forwarding"),
-                              Announcer::Priority::High);
+        const int absSpeed = static_cast<int>(qAbs(m_playback->speed()));
+        m_announcer->announce(
+            absSpeed > 1 ? tr("Fast forwarding %1x").arg(absSpeed)
+                         : tr("Fast forwarding"),
+            Announcer::Priority::High);
     });
     addAction(m_actLForward);
 
@@ -967,7 +977,8 @@ void MainWindow::createActions()
         auto *tl  = m_project->timeline();
         auto *trk = tl->trackAt(tl->currentTrackIndex());
         if (!trk) return;
-        trk->setMuted(!trk->isMuted());
+        m_undoStack->push(new ToggleMuteTrackCommand(trk));
+        m_modified = true;
         rebuildTractor();
         m_announcer->announce(
             trk->isMuted() ? tr("%1 muted.").arg(trk->name())
@@ -980,7 +991,8 @@ void MainWindow::createActions()
         auto *tl  = m_project->timeline();
         auto *trk = tl->trackAt(tl->currentTrackIndex());
         if (!trk) return;
-        trk->setLocked(!trk->isLocked());
+        m_undoStack->push(new ToggleLockTrackCommand(trk));
+        m_modified = true;
         m_announcer->announce(
             trk->isLocked() ? tr("%1 locked.").arg(trk->name())
                             : tr("%1 unlocked.").arg(trk->name()),
@@ -1329,7 +1341,7 @@ void MainWindow::createDockWidgets()
 
                 m_undoStack->push(new AddClipCommand(trk, clip));
                 m_modified = true;
-                m_timeline->refresh();
+                rebuildTractor();
 
                 m_announcer->announce(
                     tr("Added %1 to %2 (%3).")
@@ -1368,6 +1380,7 @@ void MainWindow::createDockWidgets()
                     entry ? entry->description : QString());
                 m_undoStack->push(new AddEffectCommand(clip, effect));
                 m_modified = true;
+                rebuildTractor();
 
                 m_announcer->announce(
                     tr("Applied effect %1 to %2.")
@@ -1457,7 +1470,7 @@ void MainWindow::registerShortcuts()
     sm.registerAction(QStringLiteral("transport.goToTimecode"), m_actGoToTimecode,
                       QKeySequence(QStringLiteral("Ctrl+G")));
     sm.registerAction(QStringLiteral("timeline.soloTrack"), m_actSoloTrack,
-                      QKeySequence(QStringLiteral("Ctrl+Shift+S")));
+                      QKeySequence(QStringLiteral("Ctrl+Shift+O")));
 
     // Nudge clip position
     sm.registerAction(QStringLiteral("timeline.nudgeClipLeft"), m_actNudgeClipLeft,
