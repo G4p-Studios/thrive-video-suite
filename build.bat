@@ -301,6 +301,10 @@ if exist "%BUILD_DIR%\thrive-video-suite.exe" (
         copy /y "%MLT_DIR%\bin\libmlt-7.dll" "%BUILD_DIR%\" >nul 2>&1
         copy /y "%MLT_DIR%\bin\libmlt++-7.dll" "%BUILD_DIR%\" >nul 2>&1
     )
+    REM Copy all vcpkg DLLs to build output
+    for %%F in ("%VCPKG_INSTALLED%\bin\*.dll") do copy /y "%%F" "%BUILD_DIR%\" >nul 2>&1
+    REM Special case: copy dl.dll as libdl.dll
+    if exist "%VCPKG_INSTALLED%\bin\dl.dll" copy /y "%VCPKG_INSTALLED%\bin\dl.dll" "%BUILD_DIR%\libdl.dll" >nul 2>&1
 )
 
 REM ====================================================================
