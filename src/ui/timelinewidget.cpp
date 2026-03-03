@@ -8,6 +8,7 @@
 #include "../core/timeline.h"
 #include "../core/track.h"
 #include "../core/clip.h"
+#include "../core/marker.h"
 #include "../core/timecode.h"
 #include "../accessibility/announcer.h"
 
@@ -122,13 +123,48 @@ void TimelineWidget::keyPressEvent(QKeyEvent *event)
         break;
     }
 
-    case Qt::Key_M:
+    case Qt::Key_M: {
+        auto posBefore = m_timeline->playheadPosition();
         m_timeline->navigateNextMarker();
+        if (m_timeline->playheadPosition().frame() != posBefore.frame()) {
+            // Find the marker at the new position
+            for (auto *mk : m_timeline->markers()) {
+                if (mk->position().frame() == m_timeline->playheadPosition().frame()) {
+                    m_announcer->announce(
+                        tr("Marker: %1, %2")
+                            .arg(mk->name(),
+                                 m_timeline->playheadPosition().toString()),
+                        Announcer::Priority::Normal);
+                    break;
+                }
+            }
+        } else {
+            m_announcer->announce(
+                tr("No next marker."), Announcer::Priority::Normal);
+        }
         break;
+    }
 
-    case Qt::Key_N:
+    case Qt::Key_N: {
+        auto posBefore = m_timeline->playheadPosition();
         m_timeline->navigatePreviousMarker();
+        if (m_timeline->playheadPosition().frame() != posBefore.frame()) {
+            for (auto *mk : m_timeline->markers()) {
+                if (mk->position().frame() == m_timeline->playheadPosition().frame()) {
+                    m_announcer->announce(
+                        tr("Marker: %1, %2")
+                            .arg(mk->name(),
+                                 m_timeline->playheadPosition().toString()),
+                        Announcer::Priority::Normal);
+                    break;
+                }
+            }
+        } else {
+            m_announcer->announce(
+                tr("No previous marker."), Announcer::Priority::Normal);
+        }
         break;
+    }
 
     case Qt::Key_Home:
         m_timeline->setPlayheadPosition(
@@ -153,6 +189,27 @@ void TimelineWidget::focusInEvent(QFocusEvent *event)
 {
     QWidget::focusInEvent(event);
     updateStatusLabel();
+
+    // Announce current position for screen reader users
+    int trackIdx = m_timeline->currentTrackIndex();
+    const Track *trk = m_timeline->trackAt(trackIdx);
+    if (trk) {
+        QString summary = tr("Timeline. Track %1 of %2, %3.")
+                              .arg(trackIdx + 1)
+                              .arg(m_timeline->trackCount())
+                              .arg(trk->name());
+        int clipIdx = m_timeline->currentClipIndex();
+        if (clipIdx >= 0 && clipIdx < trk->clipCount()) {
+            summary += QLatin1Char(' ')
+                       + tr("Clip %1 of %2, %3.")
+                             .arg(clipIdx + 1)
+                             .arg(trk->clipCount())
+                             .arg(trk->clipAt(clipIdx)->name());
+        } else {
+            summary += QLatin1Char(' ') + tr("No clips.");
+        }
+        m_announcer->announce(summary, Announcer::Priority::Normal);
+    }
 }
 
 // ── status label (visual fallback) ──────────────────────────────────

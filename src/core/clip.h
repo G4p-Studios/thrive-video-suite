@@ -50,6 +50,7 @@ public:
     // Effects
     [[nodiscard]] const QVector<Effect *> &effects() const { return m_effects; }
     void addEffect(Effect *effect);
+    void insertEffect(int index, Effect *effect);
     void removeEffect(int index);
     void moveEffect(int fromIndex, int toIndex);
 

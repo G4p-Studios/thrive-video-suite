@@ -64,6 +64,8 @@ private:
     void updateWindowTitle();
     void addRecentProject(const QString &path);
     void updateRecentMenu();
+    void setupAutoSave();
+    void performAutoSave();
 
     // Owned subsystems
     Project            *m_project   = nullptr;
@@ -136,6 +138,10 @@ private:
     // Track reorder actions
     QAction *m_actMoveTrackUp    = nullptr;
     QAction *m_actMoveTrackDown  = nullptr;
+    QAction *m_actSoloTrack      = nullptr;
+
+    // Auto-save
+    QTimer  *m_autoSaveTimer     = nullptr;
 
     // Recent projects
     QMenu   *m_recentMenu        = nullptr;

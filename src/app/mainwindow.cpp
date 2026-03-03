@@ -51,6 +51,8 @@
 #include <QSettings>
 #include <QApplication>
 #include <QTimer>
+#include <QStandardPaths>
+#include <QDir>
 #include <QAbstractButton>
 #include <QComboBox>
 #include <QAbstractSpinBox>
@@ -88,6 +90,13 @@ MainWindow::MainWindow(Project *project,
     connect(m_project->timeline(), &Timeline::tracksChanged,
             this, &MainWindow::rebuildTractor);
 
+    // Safely handle timeline replacement (e.g. Project::reset)
+    connect(m_project, &Project::timelineAboutToChange,
+            this, [this]() {
+                // Disconnect from the old timeline before it is deleted
+                m_project->timeline()->disconnect(this);
+            });
+
     // When a new tractor is ready, reconnect playback
     connect(m_tractorBuilder, &TractorBuilder::tractorReady,
             this, [this](Mlt::Tractor *tractor) {
@@ -120,6 +129,7 @@ MainWindow::MainWindow(Project *project,
     createMenus();
     createDockWidgets();
     registerShortcuts();
+    setupAutoSave();
 
     // Load saved shortcuts
     ShortcutManager::instance().load();
@@ -433,11 +443,13 @@ void MainWindow::createActions()
         if (!trk || idx < 0 || idx >= trk->clipCount()) {
             m_announcer->announce(tr("No clip selected."),
                                   Announcer::Priority::Normal);
+            m_cues->play(AudioCueManager::Cue::Error);
             return;
         }
         if (trk->isLocked()) {
             m_announcer->announce(tr("Track is locked."),
                                   Announcer::Priority::Normal);
+            m_cues->play(AudioCueManager::Cue::Error);
             return;
         }
         // Copy to clipboard before removing
@@ -464,6 +476,7 @@ void MainWindow::createActions()
         if (!trk || idx < 0 || idx >= trk->clipCount()) {
             m_announcer->announce(tr("No clip selected."),
                                   Announcer::Priority::Normal);
+            m_cues->play(AudioCueManager::Cue::Error);
             return;
         }
         auto *src = trk->clipAt(idx);
@@ -484,6 +497,7 @@ void MainWindow::createActions()
         if (!m_clipboardClip) {
             m_announcer->announce(tr("Clipboard is empty."),
                                   Announcer::Priority::Normal);
+            m_cues->play(AudioCueManager::Cue::Error);
             return;
         }
         auto *tl  = m_project->timeline();
@@ -491,11 +505,13 @@ void MainWindow::createActions()
         if (!trk) {
             m_announcer->announce(tr("No track available."),
                                   Announcer::Priority::Normal);
+            m_cues->play(AudioCueManager::Cue::Error);
             return;
         }
         if (trk->isLocked()) {
             m_announcer->announce(tr("Track is locked."),
                                   Announcer::Priority::Normal);
+            m_cues->play(AudioCueManager::Cue::Error);
             return;
         }
         // Create a new clip from the clipboard data
@@ -523,11 +539,13 @@ void MainWindow::createActions()
         if (!trk || idx < 0 || idx >= trk->clipCount()) {
             m_announcer->announce(tr("No clip selected."),
                                   Announcer::Priority::Normal);
+            m_cues->play(AudioCueManager::Cue::Error);
             return;
         }
         if (trk->isLocked()) {
             m_announcer->announce(tr("Track is locked."),
                                   Announcer::Priority::Normal);
+            m_cues->play(AudioCueManager::Cue::Error);
             return;
         }
         const QString name = trk->clipAt(idx)->name();
@@ -559,11 +577,13 @@ void MainWindow::createActions()
         if (!trk || idx < 0 || idx >= trk->clipCount()) {
             m_announcer->announce(tr("No clip selected to split."),
                                   Announcer::Priority::Normal);
+            m_cues->play(AudioCueManager::Cue::Error);
             return;
         }
         if (trk->isLocked()) {
             m_announcer->announce(tr("Track is locked."),
                                   Announcer::Priority::Normal);
+            m_cues->play(AudioCueManager::Cue::Error);
             return;
         }
         m_undoStack->push(new SplitClipCommand(trk, idx, tl->playheadPosition()));
@@ -637,6 +657,7 @@ void MainWindow::createActions()
         if (!trk || idx < 0 || idx >= trk->clipCount()) {
             m_announcer->announce(tr("Select a clip first."),
                                   Announcer::Priority::Normal);
+            m_cues->play(AudioCueManager::Cue::Error);
             return;
         }
 
@@ -694,6 +715,7 @@ void MainWindow::createActions()
         if (found < 0) {
             m_announcer->announce(tr("No marker at playhead."),
                                   Announcer::Priority::Normal);
+            m_cues->play(AudioCueManager::Cue::Error);
             return;
         }
         const QString name = tl->markers().at(found)->name();
@@ -713,22 +735,26 @@ void MainWindow::createActions()
         if (!trk || clipIdx < 0 || clipIdx >= trk->clipCount()) {
             m_announcer->announce(tr("No clip selected."),
                                   Announcer::Priority::Normal);
+            m_cues->play(AudioCueManager::Cue::Error);
             return;
         }
         if (trk->isLocked()) {
             m_announcer->announce(tr("Track is locked."),
                                   Announcer::Priority::Normal);
+            m_cues->play(AudioCueManager::Cue::Error);
             return;
         }
         if (trkIdx <= 0) {
             m_announcer->announce(tr("Already on the first track."),
                                   Announcer::Priority::Normal);
+            m_cues->play(AudioCueManager::Cue::Error);
             return;
         }
         auto *dst = tl->trackAt(trkIdx - 1);
         if (dst->isLocked()) {
             m_announcer->announce(tr("Destination track is locked."),
                                   Announcer::Priority::Normal);
+            m_cues->play(AudioCueManager::Cue::Error);
             return;
         }
         m_undoStack->push(new MoveClipBetweenTracksCommand(
@@ -750,22 +776,26 @@ void MainWindow::createActions()
         if (!trk || clipIdx < 0 || clipIdx >= trk->clipCount()) {
             m_announcer->announce(tr("No clip selected."),
                                   Announcer::Priority::Normal);
+            m_cues->play(AudioCueManager::Cue::Error);
             return;
         }
         if (trk->isLocked()) {
             m_announcer->announce(tr("Track is locked."),
                                   Announcer::Priority::Normal);
+            m_cues->play(AudioCueManager::Cue::Error);
             return;
         }
         if (trkIdx >= tl->trackCount() - 1) {
             m_announcer->announce(tr("Already on the last track."),
                                   Announcer::Priority::Normal);
+            m_cues->play(AudioCueManager::Cue::Error);
             return;
         }
         auto *dst = tl->trackAt(trkIdx + 1);
         if (dst->isLocked()) {
             m_announcer->announce(tr("Destination track is locked."),
                                   Announcer::Priority::Normal);
+            m_cues->play(AudioCueManager::Cue::Error);
             return;
         }
         m_undoStack->push(new MoveClipBetweenTracksCommand(
@@ -848,6 +878,7 @@ void MainWindow::createActions()
         if (tc.frame() < 0) {
             m_announcer->announce(tr("Invalid timecode."),
                                   Announcer::Priority::Normal);
+            m_cues->play(AudioCueManager::Cue::Error);
             return;
         }
         m_project->timeline()->setPlayheadPosition(tc);
@@ -935,6 +966,39 @@ void MainWindow::createActions()
             tr("%1 moved down.").arg(tl->trackAt(idx + 1)->name()),
             Announcer::Priority::High);
     });
+
+    // ── Solo track ─────────────────────────────────────────────────
+    m_actSoloTrack = new QAction(tr("&Solo Current Track"), this);
+    connect(m_actSoloTrack, &QAction::triggered, this, [this]() {
+        auto *tl  = m_project->timeline();
+        auto *cur = tl->trackAt(tl->currentTrackIndex());
+        if (!cur) return;
+
+        // Check if this track is already soloed (all others muted, this unmuted)
+        bool alreadySoloed = !cur->isMuted();
+        for (int i = 0; alreadySoloed && i < tl->trackCount(); ++i) {
+            auto *t = tl->trackAt(i);
+            if (t != cur && !t->isMuted())
+                alreadySoloed = false;
+        }
+
+        if (alreadySoloed) {
+            // Un-solo: unmute all tracks
+            for (int i = 0; i < tl->trackCount(); ++i)
+                tl->trackAt(i)->setMuted(false);
+            m_announcer->announce(
+                tr("All tracks unmuted."), Announcer::Priority::High);
+        } else {
+            // Solo: mute everything except current
+            for (int i = 0; i < tl->trackCount(); ++i)
+                tl->trackAt(i)->setMuted(i != tl->currentTrackIndex());
+            m_announcer->announce(
+                tr("%1 soloed.").arg(cur->name()),
+                Announcer::Priority::High);
+        }
+        m_modified = true;
+        rebuildTractor();
+    });
 }
 
 void MainWindow::createMenus()
@@ -979,6 +1043,7 @@ void MainWindow::createMenus()
     timelineMenu->addSeparator();
     timelineMenu->addAction(m_actMuteTrack);
     timelineMenu->addAction(m_actLockTrack);
+    timelineMenu->addAction(m_actSoloTrack);
     timelineMenu->addSeparator();
     timelineMenu->addAction(m_actMoveTrackUp);
     timelineMenu->addAction(m_actMoveTrackDown);
@@ -1021,7 +1086,7 @@ void MainWindow::createDockWidgets()
     addDockWidget(Qt::BottomDockWidgetArea, transportDock);
 
     // Media browser (left)
-    m_media = new MediaBrowser(m_announcer, this);
+    m_media = new MediaBrowser(m_announcer, m_engine, this);
     auto *mediaDock = new QDockWidget(tr("Media"), this);
     mediaDock->setWidget(m_media);
     addDockWidget(Qt::LeftDockWidgetArea, mediaDock);
@@ -1129,22 +1194,30 @@ void MainWindow::createDockWidgets()
                     m_announcer->announce(
                         tr("Select a clip first before applying an effect."),
                         Announcer::Priority::High);
+                    m_cues->play(AudioCueManager::Cue::Error);
                     return;
                 }
                 if (trk->isLocked()) {
                     m_announcer->announce(tr("Track is locked."),
                                           Announcer::Priority::Normal);
+                    m_cues->play(AudioCueManager::Cue::Error);
                     return;
                 }
 
+                // Look up curated display name from the catalog
+                const auto *entry = m_catalog->findByServiceId(serviceId);
+                const QString displayName = entry ? entry->displayName
+                                                  : serviceId;
+
                 auto *clip   = trk->clipAt(idx);
-                auto *effect = new Effect(serviceId, serviceId, QString());
+                auto *effect = new Effect(serviceId, displayName, 
+                    entry ? entry->description : QString());
                 m_undoStack->push(new AddEffectCommand(clip, effect));
                 m_modified = true;
 
                 m_announcer->announce(
                     tr("Applied effect %1 to %2.")
-                        .arg(serviceId, clip->name()),
+                        .arg(displayName, clip->name()),
                     Announcer::Priority::High);
             });
 }
@@ -1227,6 +1300,8 @@ void MainWindow::registerShortcuts()
                       QKeySequence(QStringLiteral("Shift+Down")));
     sm.registerAction(QStringLiteral("transport.goToTimecode"), m_actGoToTimecode,
                       QKeySequence(QStringLiteral("Ctrl+G")));
+    sm.registerAction(QStringLiteral("timeline.soloTrack"), m_actSoloTrack,
+                      QKeySequence(QStringLiteral("Ctrl+Shift+S")));
 }
 
 void MainWindow::rebuildTractor()
@@ -1340,6 +1415,39 @@ void MainWindow::updateRecentMenu()
                 tr("Project opened: %1").arg(filePath),
                 Announcer::Priority::High);
         });
+    }
+}
+
+void MainWindow::setupAutoSave()
+{
+    m_autoSaveTimer = new QTimer(this);
+    m_autoSaveTimer->setInterval(3 * 60 * 1000); // 3 minutes
+    connect(m_autoSaveTimer, &QTimer::timeout,
+            this, &MainWindow::performAutoSave);
+    m_autoSaveTimer->start();
+}
+
+void MainWindow::performAutoSave()
+{
+    if (!m_modified && !m_project->isModified())
+        return;
+
+    QString autoPath;
+    if (!m_currentFilePath.isEmpty()) {
+        autoPath = m_currentFilePath + QStringLiteral(".autosave");
+    } else {
+        const QString dir = QStandardPaths::writableLocation(
+            QStandardPaths::AppDataLocation);
+        QDir().mkpath(dir);
+        autoPath = dir + QStringLiteral("/autosave.tvs");
+    }
+
+    m_serializer->setMltXml(m_tractorBuilder->serializeToXml());
+    if (m_serializer->save(m_project, autoPath)) {
+        // Silent success – don't announce to avoid interrupting work
+    } else {
+        m_announcer->announce(
+            tr("Auto-save failed."), Announcer::Priority::Low);
     }
 }
 

@@ -7,8 +7,10 @@
 #include <mlt++/MltConsumer.h>
 #include <mlt++/MltProducer.h>
 #include <mlt++/MltProfile.h>
+#include <mlt++/MltTractor.h>
 
 #include <QTimer>
+#include <QTemporaryFile>
 
 namespace Thrive {
 
@@ -34,11 +36,41 @@ bool RenderEngine::startRender(Mlt::Producer *producer,
     if (m_rendering || !m_engine || !m_engine->isInitialized() || !producer)
         return false;
 
-    m_producer = producer;
-    m_totalFrames = producer->get_length();
+    // Clone the producer via XML so that edits to the live timeline
+    // during export don't corrupt the render pipeline.
+    auto *profile = m_engine->compositionProfile();
+
+    // Serialize via the xml consumer into a temp file, then reload
+    {
+        QTemporaryFile tmpFile;
+        tmpFile.setAutoRemove(true);
+        if (tmpFile.open()) {
+            const QByteArray tmpPath = tmpFile.fileName().toUtf8();
+            tmpFile.close();
+
+            Mlt::Consumer xmlCons(*profile, "xml", tmpPath.constData());
+            if (xmlCons.is_valid()) {
+                xmlCons.set("no_meta", 1);
+                xmlCons.connect(*producer);
+                xmlCons.run();
+
+                m_clonedProducer = std::make_unique<Mlt::Producer>(
+                    *profile, tmpPath.constData());
+            }
+        }
+    }
+
+    if (m_clonedProducer && m_clonedProducer->is_valid()) {
+        m_producer = m_clonedProducer.get();
+    } else {
+        // Fallback: use the original pointer directly
+        m_clonedProducer.reset();
+        m_producer = producer;
+    }
+
+    m_totalFrames = m_producer->get_length();
 
     // Create consumer at full composition resolution
-    auto *profile = m_engine->compositionProfile();
     m_renderConsumer = std::make_unique<Mlt::Consumer>(*profile, "avformat");
 
     if (!m_renderConsumer->is_valid())
@@ -105,6 +137,7 @@ void RenderEngine::cancelRender()
         emit renderFinished(false);
     }
     m_renderConsumer.reset();
+    m_clonedProducer.reset();
 }
 
 int RenderEngine::progressPercent() const

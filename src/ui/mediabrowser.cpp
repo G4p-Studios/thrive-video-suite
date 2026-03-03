@@ -3,6 +3,10 @@
 
 #include "mediabrowser.h"
 #include "../accessibility/announcer.h"
+#include "../engine/mltengine.h"
+
+#include <mlt++/MltProducer.h>
+#include <mlt++/MltProfile.h>
 
 #include <QListWidget>
 #include <QPushButton>
@@ -13,9 +17,11 @@
 
 namespace Thrive {
 
-MediaBrowser::MediaBrowser(Announcer *announcer, QWidget *parent)
+MediaBrowser::MediaBrowser(Announcer *announcer, MltEngine *engine,
+                           QWidget *parent)
     : QWidget(parent)
     , m_announcer(announcer)
+    , m_engine(engine)
     , m_layout(new QVBoxLayout(this))
 {
     setObjectName(QStringLiteral("MediaBrowser"));
@@ -73,6 +79,42 @@ void MediaBrowser::importFiles()
         auto *item = new QListWidgetItem(fi.fileName(), m_list);
         item->setData(Qt::UserRole, path);
         item->setToolTip(path);
+
+        // Probe metadata via MLT for accessible description
+        if (m_engine && m_engine->isInitialized()) {
+            Mlt::Producer probe(*m_engine->compositionProfile(),
+                                path.toUtf8().constData());
+            if (probe.is_valid()) {
+                const int frames = probe.get_length();
+                const double fps = probe.get_fps();
+                const int secs = fps > 0 ? static_cast<int>(frames / fps) : 0;
+                const int w = probe.get_int("meta.media.width");
+                const int h = probe.get_int("meta.media.height");
+                const char *vcodec = probe.get("meta.media.0.codec.name");
+                const char *acodec = probe.get("meta.media.1.codec.name");
+
+                QStringList parts;
+                if (secs > 0) {
+                    int mm = secs / 60;
+                    int ss = secs % 60;
+                    parts << tr("%1:%2")
+                                 .arg(mm, 2, 10, QLatin1Char('0'))
+                                 .arg(ss, 2, 10, QLatin1Char('0'));
+                }
+                if (w > 0 && h > 0)
+                    parts << QStringLiteral("%1x%2").arg(w).arg(h);
+                if (vcodec && *vcodec)
+                    parts << QString::fromUtf8(vcodec);
+                if (acodec && *acodec)
+                    parts << QString::fromUtf8(acodec);
+
+                if (!parts.isEmpty()) {
+                    const QString desc = parts.join(QStringLiteral(", "));
+                    item->setData(Qt::AccessibleDescriptionRole, desc);
+                    item->setToolTip(path + QStringLiteral("\n") + desc);
+                }
+            }
+        }
     }
 
     const int count = paths.size();
@@ -106,7 +148,11 @@ void MediaBrowser::onCurrentChanged(QListWidgetItem *current,
                                     QListWidgetItem * /*previous*/)
 {
     if (!current) return;
-    m_announcer->announce(current->text(), Announcer::Priority::Low);
+    QString text = current->text();
+    const QString desc = current->data(Qt::AccessibleDescriptionRole).toString();
+    if (!desc.isEmpty())
+        text += QStringLiteral(", ") + desc;
+    m_announcer->announce(text, Announcer::Priority::Low);
 }
 
 } // namespace Thrive

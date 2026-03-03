@@ -145,7 +145,7 @@ void SplitClipCommand::undo()
 {
     if (!m_executed) return;
 
-    // Remove the second half
+    // Remove the second half (will be unparented, we keep the pointer)
     m_track->removeClip(m_clipIndex + 1);
 
     // Restore original out point
@@ -161,34 +161,38 @@ void SplitClipCommand::redo()
     auto *original = m_track->clipAt(m_clipIndex);
     if (!original) return;
 
-    m_originalOut = original->outPoint();
+    if (!m_newClip) {
+        // First redo — capture state and create the split clip
+        m_originalOut = original->outPoint();
 
-    // Create second half
-    m_newClip = new Clip(
-        original->name() + QObject::tr(" (split)"),
-        original->sourcePath(),
-        m_splitPoint,
-        m_originalOut);
+        m_newClip = new Clip(
+            original->name() + QObject::tr(" (split)"),
+            original->sourcePath(),
+            m_splitPoint,
+            m_originalOut);
 
-    // Deep-copy effects from original to new clip
-    for (auto *fx : original->effects()) {
-        auto *copy = new Effect(fx->serviceId(), fx->displayName(),
-                                fx->description(), m_newClip);
-        for (const auto &p : fx->parameters())
-            copy->addParameter(p);
-        copy->setEnabled(fx->isEnabled());
-        m_newClip->addEffect(copy);
+        // Deep-copy effects from original to new clip
+        for (auto *fx : original->effects()) {
+            auto *copy = new Effect(fx->serviceId(), fx->displayName(),
+                                    fx->description(), m_newClip);
+            for (const auto &p : fx->parameters())
+                copy->addParameter(p);
+            copy->setEnabled(fx->isEnabled());
+            m_newClip->addEffect(copy);
+        }
+
+        // Move the original's outTransition to the new clip
+        if (original->outTransition()) {
+            m_newClip->setOutTransition(original->outTransition());
+            original->setOutTransition(nullptr);
+        }
+    } else {
+        // Subsequent redo — just recapture the originalOut
+        m_originalOut = original->outPoint();
     }
 
     // Place the new clip at the split position on the timeline
     m_newClip->setTimelinePosition(m_splitPoint);
-
-    // Move the original's outTransition to the new clip (it is now the
-    // clip that borders the next clip)
-    if (original->outTransition()) {
-        m_newClip->setOutTransition(original->outTransition());
-        original->setOutTransition(nullptr);
-    }
 
     // Trim original to end at split point
     original->setOutPoint(m_splitPoint);
@@ -305,7 +309,7 @@ RemoveEffectCommand::RemoveEffectCommand(Clip *clip, int effectIndex,
 void RemoveEffectCommand::undo()
 {
     if (m_effect) {
-        m_clip->addEffect(m_effect);
+        m_clip->insertEffect(m_index, m_effect);
         m_ownsEffect = false;
     }
 }
@@ -337,14 +341,17 @@ AddMarkerCommand::AddMarkerCommand(Timeline *timeline, const QString &name,
 
 void AddMarkerCommand::undo()
 {
-    if (m_insertedIndex >= 0)
+    if (m_insertedIndex >= 0) {
         m_timeline->removeMarker(m_insertedIndex);
+        // m_marker is now unparented and owned by this command
+    }
 }
 
 void AddMarkerCommand::redo()
 {
-    auto *marker = new Marker(m_name, m_position, m_comment);
-    m_timeline->addMarker(marker);
+    if (!m_marker)
+        m_marker = new Marker(m_name, m_position, m_comment);
+    m_timeline->addMarker(m_marker);
     m_insertedIndex = m_timeline->markers().size() - 1;
 }
 
@@ -370,13 +377,15 @@ RemoveMarkerCommand::RemoveMarkerCommand(Timeline *timeline, int markerIndex,
 
 void RemoveMarkerCommand::undo()
 {
-    auto *marker = new Marker(m_name, m_position, m_comment);
-    m_timeline->insertMarker(m_index, marker);
+    if (!m_marker)
+        m_marker = new Marker(m_name, m_position, m_comment);
+    m_timeline->insertMarker(m_index, m_marker);
 }
 
 void RemoveMarkerCommand::redo()
 {
     m_timeline->removeMarker(m_index);
+    // m_marker is now unparented and owned by this command
 }
 
 // ===========================================================================
@@ -614,5 +623,43 @@ MoveEffectCommand::MoveEffectCommand(Clip *clip, int fromIndex, int toIndex,
 
 void MoveEffectCommand::undo()  { m_clip->moveEffect(m_to, m_from); }
 void MoveEffectCommand::redo()  { m_clip->moveEffect(m_from, m_to); }
+
+// ===========================================================================
+// ChangeTransitionDurationCommand
+// ===========================================================================
+ChangeTransitionDurationCommand::ChangeTransitionDurationCommand(
+        Transition *transition, const TimeCode &newDuration,
+        QUndoCommand *parent)
+    : QUndoCommand(parent)
+    , m_transition(transition)
+    , m_oldDuration(transition->duration())
+    , m_newDuration(newDuration)
+{
+    setText(QObject::tr("Change transition duration"));
+}
+
+void ChangeTransitionDurationCommand::undo()
+{
+    m_transition->setDuration(m_oldDuration);
+}
+
+void ChangeTransitionDurationCommand::redo()
+{
+    m_transition->setDuration(m_newDuration);
+}
+
+int ChangeTransitionDurationCommand::id() const
+{
+    return 1002;  // unique ID for merge support
+}
+
+bool ChangeTransitionDurationCommand::mergeWith(const QUndoCommand *other)
+{
+    auto *cmd = dynamic_cast<const ChangeTransitionDurationCommand *>(other);
+    if (!cmd) return false;
+    if (cmd->m_transition != m_transition) return false;
+    m_newDuration = cmd->m_newDuration;
+    return true;
+}
 
 } // namespace Thrive

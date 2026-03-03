@@ -28,7 +28,10 @@ void Effect::setDisplayName(const QString &name)
 
 void Effect::setDescription(const QString &desc)
 {
-    m_description = desc;
+    if (m_description != desc) {
+        m_description = desc;
+        emit descriptionChanged(m_description);
+    }
 }
 
 void Effect::setCategory(const QString &cat)

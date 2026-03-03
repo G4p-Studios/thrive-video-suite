@@ -73,7 +73,8 @@ void Track::insertClip(int index, Clip *clip)
 void Track::removeClip(int index)
 {
     if (index >= 0 && index < m_clips.size()) {
-        m_clips.takeAt(index);
+        auto *clip = m_clips.takeAt(index);
+        clip->setParent(nullptr);   // transfer ownership to caller / undo cmd
         emit clipsChanged();
     }
 }
@@ -99,7 +100,8 @@ void Track::addTrackEffect(Effect *effect)
 void Track::removeTrackEffect(int index)
 {
     if (index >= 0 && index < m_trackEffects.size()) {
-        m_trackEffects.takeAt(index);
+        auto *fx = m_trackEffects.takeAt(index);
+        fx->setParent(nullptr);
         emit trackEffectsChanged();
     }
 }

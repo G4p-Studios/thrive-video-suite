@@ -14,6 +14,7 @@ class Timeline;
 class Track;
 class Clip;
 class Effect;
+class Marker;
 class Transition;
 
 // ---------------------------------------------------------------------------
@@ -197,6 +198,7 @@ private:
     QString   m_name;
     TimeCode  m_position;
     QString   m_comment;
+    Marker   *m_marker = nullptr;
     int       m_insertedIndex = -1;
 };
 
@@ -217,6 +219,7 @@ private:
     QString   m_name;
     TimeCode  m_position;
     QString   m_comment;
+    Marker   *m_marker = nullptr;
 };
 
 // ---------------------------------------------------------------------------
@@ -399,6 +402,26 @@ private:
     Clip *m_clip;
     int   m_from;
     int   m_to;
+};
+
+// ---------------------------------------------------------------------------
+// ChangeTransitionDurationCommand – undoable transition duration edit
+// ---------------------------------------------------------------------------
+class ChangeTransitionDurationCommand : public QUndoCommand
+{
+public:
+    ChangeTransitionDurationCommand(Transition *transition,
+                                    const TimeCode &newDuration,
+                                    QUndoCommand *parent = nullptr);
+    void undo() override;
+    void redo() override;
+    int  id()   const override;
+    bool mergeWith(const QUndoCommand *other) override;
+
+private:
+    Transition *m_transition;
+    TimeCode    m_oldDuration;
+    TimeCode    m_newDuration;
 };
 
 } // namespace Thrive

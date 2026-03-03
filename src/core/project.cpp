@@ -71,8 +71,15 @@ void Project::reset()
     m_scrubAudio   = true;
     m_previewScale = 640;
 
-    // Clear existing timeline data
-    delete m_timeline;
+    // Warn observers to disconnect from the old Timeline
+    emit timelineAboutToChange();
+
+    // Disconnect all signals from the old timeline so deferred
+    // slot invocations don't dereference a dead pointer
+    if (m_timeline) {
+        m_timeline->disconnect();
+        delete m_timeline;
+    }
     m_timeline = new Timeline(this);
 
     // Create default tracks

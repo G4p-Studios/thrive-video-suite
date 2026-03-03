@@ -57,6 +57,7 @@ public:
 
 signals:
     void enabledChanged(bool enabled);
+    void descriptionChanged(const QString &description);
     void parameterChanged(const QString &paramId, const QVariant &value);
 
 private:

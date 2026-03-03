@@ -76,9 +76,20 @@ void Clip::addEffect(Effect *effect)
 void Clip::removeEffect(int index)
 {
     if (index >= 0 && index < m_effects.size()) {
-        m_effects.takeAt(index);
+        auto *fx = m_effects.takeAt(index);
+        fx->setParent(nullptr);   // transfer ownership to caller / undo cmd
         emit effectsChanged();
     }
+}
+
+void Clip::insertEffect(int index, Effect *effect)
+{
+    effect->setParent(this);
+    if (index >= 0 && index <= m_effects.size())
+        m_effects.insert(index, effect);
+    else
+        m_effects.append(effect);
+    emit effectsChanged();
 }
 
 void Clip::moveEffect(int fromIndex, int toIndex)

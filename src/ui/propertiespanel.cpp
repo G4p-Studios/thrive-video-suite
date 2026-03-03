@@ -551,9 +551,12 @@ void PropertiesPanel::populateTransitions(Clip *clip)
         layout->addRow(tr("Duration (s):"), durSpin);
 
         connect(durSpin, &QDoubleSpinBox::valueChanged,
-                this, [trans, fps](double val) {
+                this, [this, trans, fps](double val) {
                     int frames = static_cast<int>(val * fps);
-                    trans->setDuration(TimeCode(frames, fps));
+                    m_undoStack->push(
+                        new ChangeTransitionDurationCommand(
+                            trans, TimeCode(frames, fps)));
+                    emit effectChanged();
                 });
 
         // Remove button

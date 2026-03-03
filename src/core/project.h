@@ -48,6 +48,7 @@ signals:
     void nameChanged(const QString &name);
     void modifiedChanged(bool modified);
     void settingsChanged();
+    void timelineAboutToChange();
 
 private:
     QString   m_name;

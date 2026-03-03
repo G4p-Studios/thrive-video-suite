@@ -9,6 +9,7 @@
 #include "../src/core/clip.h"
 #include "../src/core/effect.h"
 #include "../src/core/marker.h"
+#include "../src/core/transition.h"
 #include "../src/core/timecode.h"
 
 using namespace Thrive;
@@ -280,6 +281,155 @@ private slots:
         m_stack->redo();
         m_stack->redo();
         QCOMPARE(m_track->clipCount(), 2);
+    }
+
+    // ── MoveClipBetweenTracksCommand ────────────────────────────────
+
+    void moveClipBetweenTracksUndoRedo()
+    {
+        auto *c1 = new Clip(QStringLiteral("Traveller"), {},
+                            TimeCode(0, 25.0), TimeCode(50, 25.0));
+        m_track->addClip(c1);
+
+        auto *audioTrack = new Track(QStringLiteral("Audio 1"),
+                                     Track::Type::Audio);
+        m_timeline->addTrack(audioTrack);
+
+        QCOMPARE(m_track->clipCount(), 1);
+        QCOMPARE(audioTrack->clipCount(), 0);
+
+        m_stack->push(new MoveClipBetweenTracksCommand(
+            m_track, 0, audioTrack));
+
+        QCOMPARE(m_track->clipCount(), 0);
+        QCOMPARE(audioTrack->clipCount(), 1);
+        QCOMPARE(audioTrack->clipAt(0)->name(), QStringLiteral("Traveller"));
+
+        m_stack->undo();
+        QCOMPARE(m_track->clipCount(), 1);
+        QCOMPARE(audioTrack->clipCount(), 0);
+
+        m_stack->redo();
+        QCOMPARE(m_track->clipCount(), 0);
+        QCOMPARE(audioTrack->clipCount(), 1);
+    }
+
+    // ── RenameTrackCommand ──────────────────────────────────────────
+
+    void renameTrackUndoRedo()
+    {
+        QCOMPARE(m_track->name(), QStringLiteral("Video 1"));
+
+        m_stack->push(new RenameTrackCommand(
+            m_track, QStringLiteral("Main Video")));
+
+        QCOMPARE(m_track->name(), QStringLiteral("Main Video"));
+
+        m_stack->undo();
+        QCOMPARE(m_track->name(), QStringLiteral("Video 1"));
+
+        m_stack->redo();
+        QCOMPARE(m_track->name(), QStringLiteral("Main Video"));
+    }
+
+    // ── MoveEffectCommand ───────────────────────────────────────────
+
+    void moveEffectUndoRedo()
+    {
+        auto *clip = new Clip(QStringLiteral("FxClip"), {},
+                              TimeCode(), TimeCode(50, 25.0));
+        m_track->addClip(clip);
+
+        auto *fx1 = new Effect(QStringLiteral("blur"),
+                               QStringLiteral("Blur"), {});
+        auto *fx2 = new Effect(QStringLiteral("sharpen"),
+                               QStringLiteral("Sharpen"), {});
+        auto *fx3 = new Effect(QStringLiteral("color"),
+                               QStringLiteral("Color"), {});
+        clip->addEffect(fx1);
+        clip->addEffect(fx2);
+        clip->addEffect(fx3);
+
+        // Move blur from 0 to 2
+        m_stack->push(new MoveEffectCommand(clip, 0, 2));
+        QCOMPARE(clip->effects().at(0)->serviceId(), QStringLiteral("sharpen"));
+        QCOMPARE(clip->effects().at(2)->serviceId(), QStringLiteral("blur"));
+
+        m_stack->undo();
+        QCOMPARE(clip->effects().at(0)->serviceId(), QStringLiteral("blur"));
+        QCOMPARE(clip->effects().at(2)->serviceId(), QStringLiteral("color"));
+    }
+
+    // ── ChangeTransitionDurationCommand ─────────────────────────────
+
+    void changeTransitionDurationUndoRedo()
+    {
+        auto *trans = new Transition(QStringLiteral("luma"),
+                                     QStringLiteral("Dissolve"),
+                                     {},
+                                     TimeCode(25, 25.0));
+
+        m_stack->push(new ChangeTransitionDurationCommand(
+            trans, TimeCode(50, 25.0)));
+
+        QCOMPARE(trans->duration().frame(), 50);
+
+        m_stack->undo();
+        QCOMPARE(trans->duration().frame(), 25);
+
+        m_stack->redo();
+        QCOMPARE(trans->duration().frame(), 50);
+
+        delete trans;
+    }
+
+    void changeTransitionDurationMerge()
+    {
+        auto *trans = new Transition(QStringLiteral("luma"),
+                                     QStringLiteral("Dissolve"),
+                                     {},
+                                     TimeCode(10, 25.0));
+
+        m_stack->push(new ChangeTransitionDurationCommand(
+            trans, TimeCode(20, 25.0)));
+        m_stack->push(new ChangeTransitionDurationCommand(
+            trans, TimeCode(30, 25.0)));
+
+        // Merged: a single undo should restore to 10
+        QCOMPARE(trans->duration().frame(), 30);
+        m_stack->undo();
+        QCOMPARE(trans->duration().frame(), 10);
+
+        delete trans;
+    }
+
+    // ── RemoveEffectCommand preserves order ─────────────────────────
+
+    void removeEffectPreservesOrder()
+    {
+        auto *clip = new Clip(QStringLiteral("OrderClip"), {},
+                              TimeCode(), TimeCode(50, 25.0));
+        m_track->addClip(clip);
+
+        auto *fx1 = new Effect(QStringLiteral("a"), QStringLiteral("A"), {});
+        auto *fx2 = new Effect(QStringLiteral("b"), QStringLiteral("B"), {});
+        auto *fx3 = new Effect(QStringLiteral("c"), QStringLiteral("C"), {});
+        clip->addEffect(fx1);
+        clip->addEffect(fx2);
+        clip->addEffect(fx3);
+
+        // Remove the middle effect
+        m_stack->push(new RemoveEffectCommand(clip, 1));
+        QCOMPARE(clip->effects().size(), 2);
+        QCOMPARE(clip->effects().at(0)->serviceId(), QStringLiteral("a"));
+        QCOMPARE(clip->effects().at(1)->serviceId(), QStringLiteral("c"));
+
+        // Undo should restore B at index 1
+        m_stack->undo();
+        QCOMPARE(clip->effects().size(), 3);
+        QCOMPARE(clip->effects().at(0)->serviceId(), QStringLiteral("a"));
+        QCOMPARE(clip->effects().at(1)->serviceId(), QStringLiteral("b"));
+        QCOMPARE(clip->effects().at(2)->serviceId(), QStringLiteral("c"));
     }
 
 private:

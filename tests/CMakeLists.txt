@@ -29,6 +29,7 @@ thrive_add_test(test_clip)
 thrive_add_test(test_track)
 thrive_add_test(test_effect)
 thrive_add_test(test_marker)
+thrive_add_test(test_transition)
 thrive_add_test(test_project)
 
 # ── command / undo tests ─────────────────────────────────────────────

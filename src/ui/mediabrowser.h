@@ -14,6 +14,7 @@ QT_FORWARD_DECLARE_CLASS(QListWidgetItem)
 namespace Thrive {
 
 class Announcer;
+class MltEngine;
 
 /// A list of imported media files.  Users can browse, import, and
 /// remove source files (video, audio, images) before placing them on
@@ -25,6 +26,7 @@ class MediaBrowser : public QWidget
 
 public:
     explicit MediaBrowser(Announcer *announcer,
+                          MltEngine *engine = nullptr,
                           QWidget *parent = nullptr);
 
     [[nodiscard]] QStringList files() const;
@@ -44,6 +46,7 @@ private slots:
 
 private:
     Announcer   *m_announcer = nullptr;
+    MltEngine   *m_engine    = nullptr;
     QListWidget *m_list      = nullptr;
     QPushButton *m_btnImport = nullptr;
     QPushButton *m_btnRemove = nullptr;

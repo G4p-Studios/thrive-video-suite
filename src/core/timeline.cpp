@@ -37,7 +37,8 @@ void Timeline::insertTrack(int index, Track *track)
 void Timeline::removeTrack(int index)
 {
     if (index >= 0 && index < m_tracks.size()) {
-        m_tracks.takeAt(index);
+        auto *trk = m_tracks.takeAt(index);
+        trk->setParent(nullptr);   // transfer ownership to caller / undo cmd
         if (m_currentTrackIndex >= m_tracks.size())
             m_currentTrackIndex = qMax(0, m_tracks.size() - 1);
         emit tracksChanged();
@@ -75,7 +76,8 @@ void Timeline::insertMarker(int index, Marker *marker)
 void Timeline::removeMarker(int index)
 {
     if (index >= 0 && index < m_markers.size()) {
-        m_markers.takeAt(index);
+        auto *m = m_markers.takeAt(index);
+        m->setParent(nullptr);
         emit markersChanged();
     }
 }

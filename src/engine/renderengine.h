@@ -55,6 +55,7 @@ private:
 
     MltEngine *m_engine = nullptr;
     std::unique_ptr<Mlt::Consumer> m_renderConsumer;
+    std::unique_ptr<Mlt::Producer> m_clonedProducer;
     Mlt::Producer *m_producer = nullptr;
     bool m_rendering = false;
     int  m_totalFrames = 0;

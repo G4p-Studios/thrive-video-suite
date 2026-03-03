@@ -93,7 +93,8 @@ TimeCode TimeCode::operator+(const TimeCode &other) const
 
 TimeCode TimeCode::operator-(const TimeCode &other) const
 {
-    return TimeCode(m_frame - other.m_frame, m_fps);
+    const auto result = m_frame - other.m_frame;
+    return TimeCode(result > 0 ? result : 0, m_fps);
 }
 
 } // namespace Thrive
