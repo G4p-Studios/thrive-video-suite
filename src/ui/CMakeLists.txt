@@ -29,6 +29,6 @@ target_link_libraries(thrive-ui
         Qt6::Widgets
         Qt6::Multimedia
     PRIVATE
-        PkgConfig::MLT
-        PkgConfig::MLTPP
+        MLT::mlt
+        MLT::mltpp
 )

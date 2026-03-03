@@ -38,21 +38,9 @@ qt_standard_project_setup(
 )
 
 # ---------------------------------------------------------------------------
-# MLT Framework 7 (via pkg-config)
+# MLT Framework 7 (native CMake find module — no pkg-config needed)
 # ---------------------------------------------------------------------------
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(MLT REQUIRED IMPORTED_TARGET mlt-framework-7)
-pkg_check_modules(MLTPP REQUIRED IMPORTED_TARGET mlt++-7)
-
-# On Windows/MSVC, MLT headers require pthread.h from pthreads-win32.
-# Ensure the vcpkg include path is added to MLT's imported targets.
-if(WIN32 AND DEFINED VCPKG_INSTALLED_DIR)
-    set(_vcpkg_inc "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include")
-    if(EXISTS "${_vcpkg_inc}/pthread.h")
-        target_include_directories(PkgConfig::MLT INTERFACE "${_vcpkg_inc}")
-        target_include_directories(PkgConfig::MLTPP INTERFACE "${_vcpkg_inc}")
-    endif()
-endif()
+find_package(MLT REQUIRED)
 
 # ---------------------------------------------------------------------------
 # Prism – screen reader abstraction (fetched from GitHub)

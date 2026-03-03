@@ -1,7 +1,7 @@
 @echo off
 setlocal enabledelayedexpansion
 REM ====================================================================
-REM  Thrive Video Suite  -  One-Command Build
+REM  Thrive Video Suite  —  One-Command Build
 REM
 REM  Usage:
 REM      build              Configure (if needed) and build
@@ -15,6 +15,11 @@ REM
 REM  First-time setup: just run "build".  If dependencies are missing
 REM  the script installs them automatically.  The only prerequisite
 REM  you must install yourself is Qt 6 (via the Qt online installer).
+REM
+REM  How it works:
+REM    This script detects your installed Qt, vcpkg, and MLT locations
+REM    and writes them into CMakeUserPresets.json.  CMake then reads
+REM    that file — no PATH hacks, no environment variables to memorise.
 REM ====================================================================
 
 set "SCRIPT_DIR=%~dp0"
@@ -40,7 +45,7 @@ if /i "%ACTION%"=="clean" (
 )
 
 REM ====================================================================
-REM  Step 1 - Find Visual Studio
+REM  Step 1 — Find Visual Studio
 REM ====================================================================
 echo.
 echo [1/6] Looking for Visual Studio 2022...
@@ -67,13 +72,11 @@ REM Activate MSVC compiler environment (cl.exe, link.exe, ninja, etc.)
 call "%VSDIR%\VC\Auxiliary\Build\vcvars64.bat" >nul 2>&1
 
 REM ====================================================================
-REM  Step 2 - Detect Qt 6
+REM  Step 2 — Detect Qt 6
 REM ====================================================================
 echo [2/6] Looking for Qt 6...
 set "QT_DIR="
 
-REM Search common locations for an MSVC build of Qt 6.
-REM The for-loops pick the highest version found (last match wins).
 for %%R in (C D E) do (
     for /d %%q in (%%R:\Qt\6.*) do (
         for /d %%a in ("%%q\msvc*") do (
@@ -81,13 +84,11 @@ for %%R in (C D E) do (
         )
     )
 )
-REM User profile (Qt installer default on some systems)
 for /d %%q in ("%USERPROFILE%\Qt\6.*") do (
     for /d %%a in ("%%q\msvc*") do (
         if exist "%%a\bin\qmake.exe" set "QT_DIR=%%a"
     )
 )
-REM Fallback: accept any Qt 6 kit (e.g. mingw, llvm)
 if not defined QT_DIR (
     for %%R in (C D) do (
         for /d %%q in (%%R:\Qt\6.*) do (
@@ -119,7 +120,7 @@ if not defined QT_DIR (
 echo       Found: %QT_DIR%
 
 REM ====================================================================
-REM  Step 3 - Check / install vcpkg + packages
+REM  Step 3 — Check / bootstrap vcpkg + pthreads
 REM ====================================================================
 echo [3/6] Checking vcpkg...
 
@@ -128,7 +129,7 @@ set "VCPKG_EXE=%VCPKG_DIR%\vcpkg.exe"
 set "VCPKG_INSTALLED=%VCPKG_DIR%\installed\x64-windows"
 
 if not exist "%VCPKG_EXE%" (
-    echo       vcpkg not found - installing...
+    echo       vcpkg not found — installing...
     if not exist "%DEPS%" mkdir "%DEPS%"
     git clone https://github.com/microsoft/vcpkg.git "%VCPKG_DIR%"
     if !ERRORLEVEL! neq 0 (
@@ -142,10 +143,11 @@ if not exist "%VCPKG_EXE%" (
     popd
 )
 
-REM Install required packages (vcpkg skips packages that are already installed)
-if not exist "%VCPKG_INSTALLED%\tools\pkgconf\pkgconf.exe" (
-    echo       Installing vcpkg packages ^(first time takes ~10-20 min^)...
-    "%VCPKG_EXE%" install pkgconf:x64-windows libxml2:x64-windows sdl2:x64-windows fftw3:x64-windows dlfcn-win32:x64-windows pthreads:x64-windows
+REM Only need pthreads (MLT headers require pthread.h).
+REM pkgconf is no longer needed — we use a native CMake find module.
+if not exist "%VCPKG_INSTALLED%\include\pthread.h" (
+    echo       Installing vcpkg packages...
+    "%VCPKG_EXE%" install pthreads:x64-windows
     if !ERRORLEVEL! neq 0 (
         echo.
         echo ERROR: vcpkg install failed.  See errors above.
@@ -156,15 +158,15 @@ if not exist "%VCPKG_INSTALLED%\tools\pkgconf\pkgconf.exe" (
 )
 
 REM ====================================================================
-REM  Step 4 - Check / install MLT Framework 7
+REM  Step 4 — Check / install MLT Framework 7
 REM ====================================================================
 echo [4/6] Checking MLT Framework 7...
 
 set "MLT_DIR=%DEPS%\mlt"
-set "MLT_PKG=%MLT_DIR%\lib\pkgconfig\mlt-framework-7.pc"
+set "MLT_LIB=%MLT_DIR%\lib\libmlt-7.lib"
 
-if not exist "%MLT_PKG%" (
-    echo       MLT not found - running full setup...
+if not exist "%MLT_LIB%" (
+    echo       MLT not found — running full setup...
     echo.
     echo       This downloads Shotcut portable ^(~193 MB^), extracts the
     echo       prebuilt MLT libraries, and rebuilds MLT++ with MSVC.
@@ -176,9 +178,9 @@ if not exist "%MLT_PKG%" (
         echo ERROR: Dependency setup failed.  See errors above.
         exit /b 1
     )
-    if not exist "%MLT_PKG%" (
+    if not exist "%MLT_LIB%" (
         echo.
-        echo ERROR: MLT pkg-config file still missing after setup.
+        echo ERROR: MLT library still missing after setup.
         echo   Try: build clean ^& build setup
         exit /b 1
     )
@@ -186,7 +188,7 @@ if not exist "%MLT_PKG%" (
     echo       Found: %MLT_DIR%
 )
 
-REM Handle explicit "setup" action - stop after deps are ready
+REM Handle explicit "setup" action — stop after deps are ready
 if /i "%ACTION%"=="setup" (
     echo.
     echo === All dependencies installed. Run "build" to compile. ===
@@ -194,28 +196,59 @@ if /i "%ACTION%"=="setup" (
 )
 
 REM ====================================================================
-REM  Step 5 - Configure CMake (only when needed)
+REM  Step 5 — Generate CMakeUserPresets.json + configure
 REM ====================================================================
 echo [5/6] Configuring...
 
-set "PKGCONF_BIN=%VCPKG_INSTALLED%\tools\pkgconf"
+REM Convert backslashes to forward slashes for CMake
+set "QT_FWD=%QT_DIR:\=/%"
+set "MLT_FWD=%MLT_DIR:\=/%"
+set "VCPKG_FWD=%VCPKG_DIR:\=/%"
+set "VCPKG_INST_FWD=%VCPKG_INSTALLED:\=/%"
 
-REM Environment for pkg-config and runtime DLL resolution
-set "CMAKE_PREFIX_PATH=%QT_DIR%;%VCPKG_INSTALLED%;%MLT_DIR%"
-set "PKG_CONFIG_PATH=%MLT_DIR%\lib\pkgconfig;%VCPKG_INSTALLED%\lib\pkgconfig"
-set "PATH=%MLT_DIR%\bin;%PKGCONF_BIN%;%QT_DIR%\bin;%PATH%"
+REM Write the user-local preset file (not checked into git).
+REM This tells CMake exactly where Qt, MLT, and vcpkg live on THIS machine.
+(
+echo {
+echo     "version": 6,
+echo     "configurePresets": [
+echo         {
+echo             "name": "default",
+echo             "inherits": "base",
+echo             "cacheVariables": {
+echo                 "CMAKE_PREFIX_PATH": "%QT_FWD%;%VCPKG_INST_FWD%;%MLT_FWD%",
+echo                 "CMAKE_TOOLCHAIN_FILE": "%VCPKG_FWD%/scripts/buildsystems/vcpkg.cmake",
+echo                 "VCPKG_TARGET_TRIPLET": "x64-windows",
+echo                 "MLT_ROOT": "%MLT_FWD%"
+echo             },
+echo             "environment": {
+echo                 "PATH": "%MLT_FWD%/bin;%QT_FWD%/bin;$penv{PATH}"
+echo             }
+echo         }
+echo     ],
+echo     "buildPresets": [
+echo         {
+echo             "name": "default",
+echo             "configurePreset": "default"
+echo         }
+echo     ],
+echo     "testPresets": [
+echo         {
+echo             "name": "default",
+echo             "configurePreset": "default",
+echo             "output": { "outputOnFailure": true }
+echo         }
+echo     ]
+echo }
+) > "%SCRIPT_DIR%CMakeUserPresets.json"
 
 set "NEED_CONFIGURE=0"
 if /i "%ACTION%"=="reconfigure" set "NEED_CONFIGURE=1"
 if not exist "%BUILD_DIR%\CMakeCache.txt" set "NEED_CONFIGURE=1"
 
 if "%NEED_CONFIGURE%"=="1" (
-    echo       Running cmake configure...
-    cmake -B "%BUILD_DIR%" -G "Ninja" ^
-        -DCMAKE_BUILD_TYPE=RelWithDebInfo ^
-        -DCMAKE_PREFIX_PATH="%CMAKE_PREFIX_PATH%" ^
-        -DCMAKE_TOOLCHAIN_FILE="%VCPKG_DIR%\scripts\buildsystems\vcpkg.cmake" ^
-        -DVCPKG_TARGET_TRIPLET=x64-windows
+    echo       Running cmake --preset default ...
+    cmake --preset default
     if !ERRORLEVEL! neq 0 (
         echo.
         echo *** CMake configure failed ***
@@ -232,7 +265,7 @@ if "%NEED_CONFIGURE%"=="1" (
 )
 
 REM ====================================================================
-REM  Step 6 - Build
+REM  Step 6 — Build
 REM ====================================================================
 echo [6/6] Building...
 
@@ -268,10 +301,9 @@ if /i "%ACTION%"=="test" (
     echo.
     echo Running tests...
     echo.
-    pushd "%BUILD_DIR%"
-    ctest --output-on-failure
+    REM The test preset inherits the configure environment (PATH with Qt/MLT)
+    ctest --preset default
     set "TEST_RESULT=!ERRORLEVEL!"
-    popd
     if !TEST_RESULT! neq 0 (
         echo.
         echo *** Some tests failed ***

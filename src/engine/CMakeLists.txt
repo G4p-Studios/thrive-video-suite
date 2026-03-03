@@ -15,6 +15,6 @@ target_link_libraries(thrive-engine
     PUBLIC
         thrive-core
         Qt6::Core
-        PkgConfig::MLT
-        PkgConfig::MLTPP
+        MLT::mlt
+        MLT::mltpp
 )
