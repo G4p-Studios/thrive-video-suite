@@ -598,6 +598,92 @@ void MainWindow::createActions()
     connect(m_actWizard, &QAction::triggered, this, &MainWindow::showWelcomeWizard);
     connect(m_actAbout, &QAction::triggered, this, &MainWindow::showAbout);
     connect(m_actQuit,  &QAction::triggered, qApp, &QApplication::quit);
+
+    // ── Transport shortcuts (global) ─────────────────────────────────
+    m_actPlayPause = new QAction(tr("Play / Pause"), this);
+    m_actPlayPause->setShortcut(Qt::Key_Space);
+    connect(m_actPlayPause, &QAction::triggered, this, [this]() {
+        m_playback->togglePlayPause();
+        const bool playing =
+            (m_playback->state() == PlaybackController::State::Playing);
+        m_announcer->announce(playing ? tr("Playing") : tr("Paused"),
+                              Announcer::Priority::High);
+    });
+    addAction(m_actPlayPause);
+
+    m_actJRewind = new QAction(tr("Rewind (J)"), this);
+    m_actJRewind->setShortcut(Qt::Key_J);
+    connect(m_actJRewind, &QAction::triggered,
+            m_playback, &PlaybackController::playReverse);
+    addAction(m_actJRewind);
+
+    m_actLForward = new QAction(tr("Fast Forward (L)"), this);
+    m_actLForward->setShortcut(Qt::Key_L);
+    connect(m_actLForward, &QAction::triggered,
+            m_playback, &PlaybackController::playForward);
+    addAction(m_actLForward);
+
+    m_actFrameBack = new QAction(tr("Step Frame Back"), this);
+    m_actFrameBack->setShortcut(Qt::Key_Comma);
+    connect(m_actFrameBack, &QAction::triggered, this, [this]() {
+        m_playback->stepFrames(-1);
+    });
+    addAction(m_actFrameBack);
+
+    m_actFrameForward = new QAction(tr("Step Frame Forward"), this);
+    m_actFrameForward->setShortcut(Qt::Key_Period);
+    connect(m_actFrameForward, &QAction::triggered, this, [this]() {
+        m_playback->stepFrames(1);
+    });
+    addAction(m_actFrameForward);
+
+    // K key = stop transport (standard JKL model)
+    auto *actKStop = new QAction(tr("Stop Transport (K)"), this);
+    actKStop->setShortcut(Qt::Key_K);
+    connect(actKStop, &QAction::triggered,
+            m_playback, &PlaybackController::stopTransport);
+    addAction(actKStop);
+
+    // ── Mute / Lock track toggles ─────────────────────────────────
+    m_actMuteTrack = new QAction(tr("Toggle Track &Mute"), this);
+    connect(m_actMuteTrack, &QAction::triggered, this, [this]() {
+        auto *tl  = m_project->timeline();
+        auto *trk = tl->trackAt(tl->currentTrackIndex());
+        if (!trk) return;
+        trk->setMuted(!trk->isMuted());
+        rebuildTractor();
+        m_announcer->announce(
+            trk->isMuted() ? tr("%1 muted.").arg(trk->name())
+                           : tr("%1 unmuted.").arg(trk->name()),
+            Announcer::Priority::High);
+    });
+
+    m_actLockTrack = new QAction(tr("Toggle Track L&ock"), this);
+    connect(m_actLockTrack, &QAction::triggered, this, [this]() {
+        auto *tl  = m_project->timeline();
+        auto *trk = tl->trackAt(tl->currentTrackIndex());
+        if (!trk) return;
+        trk->setLocked(!trk->isLocked());
+        m_announcer->announce(
+            trk->isLocked() ? tr("%1 locked.").arg(trk->name())
+                            : tr("%1 unlocked.").arg(trk->name()),
+            Announcer::Priority::High);
+    });
+
+    // ── Quick-access: focus Media / Effects panels ────────────────
+    m_actFocusMedia = new QAction(tr("Focus &Media Browser"), this);
+    connect(m_actFocusMedia, &QAction::triggered, this, [this]() {
+        m_media->setFocus();
+        m_announcer->announce(tr("Media browser"),
+                              Announcer::Priority::Normal);
+    });
+
+    m_actFocusEffects = new QAction(tr("Focus E&ffects Browser"), this);
+    connect(m_actFocusEffects, &QAction::triggered, this, [this]() {
+        m_effects->setFocus();
+        m_announcer->announce(tr("Effects browser"),
+                              Announcer::Priority::Normal);
+    });
 }
 
 void MainWindow::createMenus()
@@ -635,6 +721,21 @@ void MainWindow::createMenus()
     timelineMenu->addAction(m_actAddMarker);
     timelineMenu->addSeparator();
     timelineMenu->addAction(m_actAddTransition);
+    timelineMenu->addSeparator();
+    timelineMenu->addAction(m_actMuteTrack);
+    timelineMenu->addAction(m_actLockTrack);
+
+    auto *transportMenu = menuBar()->addMenu(tr("T&ransport"));
+    transportMenu->addAction(m_actPlayPause);
+    transportMenu->addAction(m_actJRewind);
+    transportMenu->addAction(m_actLForward);
+    transportMenu->addSeparator();
+    transportMenu->addAction(m_actFrameBack);
+    transportMenu->addAction(m_actFrameForward);
+
+    auto *viewMenu = menuBar()->addMenu(tr("&View"));
+    viewMenu->addAction(m_actFocusMedia);
+    viewMenu->addAction(m_actFocusEffects);
 
     auto *helpMenu = menuBar()->addMenu(tr("&Help"));
     helpMenu->addAction(m_actWizard);
@@ -731,8 +832,13 @@ void MainWindow::createDockWidgets()
                     filePath, inPt, outPt);
                 clip->setTimelinePosition(tl->playheadPosition());
 
-                // Add to the first video track (index 0)
-                auto *trk = tl->trackAt(0);
+                // Add to the currently selected track
+                int trkIdx = tl->currentTrackIndex();
+                auto *trk = tl->trackAt(trkIdx);
+                if (!trk) {
+                    // Fallback to track 0
+                    trk = tl->trackAt(0);
+                }
                 if (!trk) return;
 
                 m_undoStack->push(new AddClipCommand(trk, clip));
@@ -809,6 +915,30 @@ void MainWindow::registerShortcuts()
                       QKeySequence(QStringLiteral("Shift+M")));
     sm.registerAction(QStringLiteral("timeline.addTransition"), m_actAddTransition,
                       QKeySequence(QStringLiteral("Shift+T")));
+
+    // Transport shortcuts
+    sm.registerAction(QStringLiteral("transport.playPause"), m_actPlayPause,
+                      QKeySequence(Qt::Key_Space));
+    sm.registerAction(QStringLiteral("transport.rewind"), m_actJRewind,
+                      QKeySequence(Qt::Key_J));
+    sm.registerAction(QStringLiteral("transport.forward"), m_actLForward,
+                      QKeySequence(Qt::Key_L));
+    sm.registerAction(QStringLiteral("transport.frameBack"), m_actFrameBack,
+                      QKeySequence(Qt::Key_Comma));
+    sm.registerAction(QStringLiteral("transport.frameForward"), m_actFrameForward,
+                      QKeySequence(Qt::Key_Period));
+
+    // Track mute / lock
+    sm.registerAction(QStringLiteral("timeline.muteTrack"), m_actMuteTrack,
+                      QKeySequence(QStringLiteral("Ctrl+M")));
+    sm.registerAction(QStringLiteral("timeline.lockTrack"), m_actLockTrack,
+                      QKeySequence(QStringLiteral("Ctrl+Shift+L")));
+
+    // View / focus panel shortcuts
+    sm.registerAction(QStringLiteral("view.focusMedia"), m_actFocusMedia,
+                      QKeySequence(QStringLiteral("Ctrl+I")));
+    sm.registerAction(QStringLiteral("view.focusEffects"), m_actFocusEffects,
+                      QKeySequence(QStringLiteral("Ctrl+E")));
 }
 
 void MainWindow::rebuildTractor()

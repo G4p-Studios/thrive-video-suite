@@ -9,6 +9,7 @@
 #include "../core/track.h"
 #include "../core/clip.h"
 #include "../core/timecode.h"
+#include "../accessibility/announcer.h"
 
 #include <QKeyEvent>
 #include <QAccessible>
@@ -21,6 +22,7 @@ TimelineWidget::TimelineWidget(Timeline *timeline,
                                QWidget *parent)
     : QWidget(parent)
     , m_timeline(timeline)
+    , m_announcer(announcer)
     , m_layout(new QVBoxLayout(this))
     , m_statusLabel(new QLabel(this))
 {
@@ -77,25 +79,48 @@ void TimelineWidget::setTimeline(Timeline *timeline)
 void TimelineWidget::keyPressEvent(QKeyEvent *event)
 {
     switch (event->key()) {
-    case Qt::Key_Up:
+    case Qt::Key_Up: {
+        int before = m_timeline->currentTrackIndex();
         m_timeline->navigatePreviousTrack();
+        if (m_timeline->currentTrackIndex() == before && before == 0)
+            m_announcer->announce(
+                tr("First track"), Announcer::Priority::Normal);
         emit focusedClipChanged();
         break;
+    }
 
-    case Qt::Key_Down:
+    case Qt::Key_Down: {
+        int before = m_timeline->currentTrackIndex();
         m_timeline->navigateNextTrack();
+        if (m_timeline->currentTrackIndex() == before
+            && before == m_timeline->trackCount() - 1)
+            m_announcer->announce(
+                tr("Last track"), Announcer::Priority::Normal);
         emit focusedClipChanged();
         break;
+    }
 
-    case Qt::Key_Left:
+    case Qt::Key_Left: {
+        int before = m_timeline->currentClipIndex();
         m_timeline->navigatePreviousClip();
+        if (m_timeline->currentClipIndex() == before && before == 0)
+            m_announcer->announce(
+                tr("Beginning of track"), Announcer::Priority::Normal);
         emit focusedClipChanged();
         break;
+    }
 
-    case Qt::Key_Right:
+    case Qt::Key_Right: {
+        int before = m_timeline->currentClipIndex();
         m_timeline->navigateNextClip();
+        auto *trk = m_timeline->trackAt(m_timeline->currentTrackIndex());
+        if (m_timeline->currentClipIndex() == before
+            && trk && before == trk->clipCount() - 1)
+            m_announcer->announce(
+                tr("End of track"), Announcer::Priority::Normal);
         emit focusedClipChanged();
         break;
+    }
 
     case Qt::Key_M:
         m_timeline->navigateNextMarker();
@@ -106,7 +131,8 @@ void TimelineWidget::keyPressEvent(QKeyEvent *event)
         break;
 
     case Qt::Key_Home:
-        m_timeline->setPlayheadPosition(TimeCode(0, 25.0));
+        m_timeline->setPlayheadPosition(
+            TimeCode(0, m_timeline->playheadPosition().fps()));
         break;
 
     case Qt::Key_End: {

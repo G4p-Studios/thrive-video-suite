@@ -15,6 +15,7 @@
 #include <QVBoxLayout>
 #include <QFormLayout>
 #include <QLabel>
+#include <QSettings>
 
 namespace Thrive {
 
@@ -85,14 +86,22 @@ QWidget *PreferencesDialog::createGeneralTab()
     // Audio cues toggle
     m_audioCuesEnabled = new QCheckBox(tr("Enable navigation audio cues"), page);
     m_audioCuesEnabled->setAccessibleName(tr("Enable audio cues"));
-    m_audioCuesEnabled->setChecked(true);
+    {
+        QSettings settings;
+        m_audioCuesEnabled->setChecked(
+            settings.value(QStringLiteral("audioCues/enabled"), true).toBool());
+    }
     form->addRow(m_audioCuesEnabled);
 
     // Audio cue volume
     m_audioCueVolume = new QSlider(Qt::Horizontal, page);
     m_audioCueVolume->setAccessibleName(tr("Audio cue volume"));
     m_audioCueVolume->setRange(0, 100);
-    m_audioCueVolume->setValue(50);
+    {
+        QSettings settings;
+        m_audioCueVolume->setValue(
+            settings.value(QStringLiteral("audioCues/volume"), 50).toInt());
+    }
     form->addRow(tr("Cue &volume:"), m_audioCueVolume);
 
     return page;
@@ -112,6 +121,13 @@ void PreferencesDialog::onAccepted()
     emit audioCuesEnabledChanged(m_audioCuesEnabled->isChecked());
     emit audioCueVolumeChanged(
         static_cast<float>(m_audioCueVolume->value()) / 100.0f);
+
+    // Persist audio cue settings so they survive restart
+    QSettings settings;
+    settings.setValue(QStringLiteral("audioCues/enabled"),
+                      m_audioCuesEnabled->isChecked());
+    settings.setValue(QStringLiteral("audioCues/volume"),
+                      m_audioCueVolume->value());
 
     accept();
 }

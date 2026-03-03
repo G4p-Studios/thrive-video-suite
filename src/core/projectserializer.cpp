@@ -8,6 +8,7 @@
 #include "clip.h"
 #include "effect.h"
 #include "marker.h"
+#include "transition.h"
 
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -177,6 +178,24 @@ QByteArray ProjectSerializer::buildMetadataJson(const Project *project) const
                 effectsArr.append(eObj);
             }
             cObj[QStringLiteral("effects")] = effectsArr;
+
+            // Transitions
+            if (const auto *inT = clip->inTransition()) {
+                QJsonObject tObj;
+                tObj[QStringLiteral("serviceId")]   = inT->serviceId();
+                tObj[QStringLiteral("displayName")] = inT->displayName();
+                tObj[QStringLiteral("description")] = inT->description();
+                tObj[QStringLiteral("duration")]     = inT->duration().toString();
+                cObj[QStringLiteral("inTransition")] = tObj;
+            }
+            if (const auto *outT = clip->outTransition()) {
+                QJsonObject tObj;
+                tObj[QStringLiteral("serviceId")]   = outT->serviceId();
+                tObj[QStringLiteral("displayName")] = outT->displayName();
+                tObj[QStringLiteral("description")] = outT->description();
+                tObj[QStringLiteral("duration")]     = outT->duration().toString();
+                cObj[QStringLiteral("outTransition")] = tObj;
+            }
             clipsArr.append(cObj);
         }
         tObj[QStringLiteral("clips")] = clipsArr;
@@ -259,6 +278,26 @@ bool ProjectSerializer::applyMetadataJson(Project *project,
                                               pObj[QStringLiteral("value")]);
                 }
                 clip->addEffect(effect);
+            }
+
+            // Transitions
+            if (cObj.contains(QStringLiteral("inTransition"))) {
+                const auto tObj = cObj[QStringLiteral("inTransition")].toObject();
+                auto *trans = new Transition(
+                    tObj[QStringLiteral("serviceId")].toString(),
+                    tObj[QStringLiteral("displayName")].toString(),
+                    tObj[QStringLiteral("description")].toString(),
+                    TimeCode::fromString(tObj[QStringLiteral("duration")].toString(), fps));
+                clip->setInTransition(trans);
+            }
+            if (cObj.contains(QStringLiteral("outTransition"))) {
+                const auto tObj = cObj[QStringLiteral("outTransition")].toObject();
+                auto *trans = new Transition(
+                    tObj[QStringLiteral("serviceId")].toString(),
+                    tObj[QStringLiteral("displayName")].toString(),
+                    tObj[QStringLiteral("description")].toString(),
+                    TimeCode::fromString(tObj[QStringLiteral("duration")].toString(), fps));
+                clip->setOutTransition(trans);
             }
             track->addClip(clip);
         }

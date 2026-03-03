@@ -120,7 +120,8 @@ void WelcomeWizard::addPlaybackPage()
            "<li><b>L</b> — fast forward (press again to speed up)</li>"
            "<li><b>, (comma)</b> — step one frame back</li>"
            "<li><b>. (period)</b> — step one frame forward</li>"
-           "<li><b>S</b> — stop and return to start</li>"
+           "<li><b>Home</b> — jump to start</li>"
+           "<li><b>End</b> — jump to end</li>"
            "</ul>")));
 }
 

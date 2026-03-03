@@ -112,6 +112,19 @@ private:
     QAction *m_actRemoveTrack    = nullptr;
     QAction *m_actAddMarker      = nullptr;
     QAction *m_actAddTransition  = nullptr;
+    QAction *m_actMuteTrack      = nullptr;
+    QAction *m_actLockTrack      = nullptr;
+
+    // Transport actions (global shortcuts)
+    QAction *m_actPlayPause      = nullptr;
+    QAction *m_actJRewind        = nullptr;
+    QAction *m_actLForward       = nullptr;
+    QAction *m_actFrameBack      = nullptr;
+    QAction *m_actFrameForward   = nullptr;
+
+    // Quick-access actions
+    QAction *m_actFocusMedia     = nullptr;
+    QAction *m_actFocusEffects   = nullptr;
 };
 
 } // namespace Thrive

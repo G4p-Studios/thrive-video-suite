@@ -55,6 +55,7 @@ private:
     void updateStatusLabel();
 
     Timeline           *m_timeline           = nullptr;
+    Announcer          *m_announcer          = nullptr;
     AccessibleTimeline *m_accessibleTimeline = nullptr;
     QLabel             *m_statusLabel        = nullptr;
     QVBoxLayout        *m_layout             = nullptr;
