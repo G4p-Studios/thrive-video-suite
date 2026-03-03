@@ -355,6 +355,20 @@ if ((Test-Path $mltPkgCfg) -and (Test-Path $mltMsvcStamp)) {
             }
         }
 
+        # Copy MinGW runtime DLLs that libmlt-7.dll depends on.
+        # The Shotcut build of libmlt-7.dll is compiled with MinGW (GCC)
+        # and dynamically links against these runtime libraries.
+        Write-Host "  Copying MinGW runtime DLLs needed by libmlt-7..."
+        foreach ($dll in @("libwinpthread-1.dll", "libgcc_s_seh-1.dll", "libdl.dll")) {
+            $src = Join-Path $shotcutRoot $dll
+            if (Test-Path $src) {
+                Copy-Item $src $mltBinDir2 -Force
+                Write-Host "    Copied $dll" -ForegroundColor DarkGray
+            } else {
+                Write-Host "    NOTE: $dll not found in Shotcut (may not be needed)" -ForegroundColor DarkGray
+            }
+        }
+
         # Also copy MLT plugins directory if present
         foreach ($pluginDir in @("lib\mlt-7", "lib\mlt", "share\mlt-7\lib")) {
             $srcPlugins = Join-Path $shotcutRoot $pluginDir

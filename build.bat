@@ -297,14 +297,11 @@ if exist "%BUILD_DIR%\thrive-video-suite.exe" (
     if exist "%QT_DIR%\bin\windeployqt.exe" (
         "%QT_DIR%\bin\windeployqt.exe" --no-translations --no-system-d3d-compiler --no-opengl-sw "%BUILD_DIR%\thrive-video-suite.exe" >nul 2>&1
     )
-    if exist "%MLT_DIR%\bin\libmlt-7.dll" (
-        copy /y "%MLT_DIR%\bin\libmlt-7.dll" "%BUILD_DIR%\" >nul 2>&1
-        copy /y "%MLT_DIR%\bin\libmlt++-7.dll" "%BUILD_DIR%\" >nul 2>&1
-    )
+    REM Copy ALL DLLs from mlt\bin (includes libmlt-7, libmlt++-7,
+    REM and MinGW runtime DLLs like libwinpthread-1, libgcc_s_seh-1, libdl)
+    for %%F in ("%MLT_DIR%\bin\*.dll") do copy /y "%%F" "%BUILD_DIR%\" >nul 2>&1
     REM Copy all vcpkg DLLs to build output
     for %%F in ("%VCPKG_INSTALLED%\bin\*.dll") do copy /y "%%F" "%BUILD_DIR%\" >nul 2>&1
-    REM Special case: copy dl.dll as libdl.dll
-    if exist "%VCPKG_INSTALLED%\bin\dl.dll" copy /y "%VCPKG_INSTALLED%\bin\dl.dll" "%BUILD_DIR%\libdl.dll" >nul 2>&1
 )
 
 REM ====================================================================
