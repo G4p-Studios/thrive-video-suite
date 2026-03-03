@@ -197,8 +197,8 @@ void PropertiesPanel::inspectTrack(Track *track)
     m_clipOutPoint->setEnabled(false);
     m_clipDuration->setText(tr("%n clip(s)", nullptr, track->clips().size()));
 
-    // Show track-level effects (read-only view – no reordering/removal yet)
-    populateEffects(track->trackEffects());
+    // Show track-level effects (read-only – no reordering/removal)
+    populateEffects(track->trackEffects(), /*readOnly=*/true);
     clearTransitions();
 
     m_announcer->announce(
@@ -340,7 +340,8 @@ void PropertiesPanel::clearEffects()
     m_effectsGroup->setVisible(false);
 }
 
-void PropertiesPanel::populateEffects(const QVector<Effect *> &effects)
+void PropertiesPanel::populateEffects(const QVector<Effect *> &effects,
+                                      bool readOnly)
 {
     clearEffects();
 
@@ -358,52 +359,54 @@ void PropertiesPanel::populateEffects(const QVector<Effect *> &effects)
             tr("Effect: %1").arg(effect->displayName()));
         auto *cardLayout = new QFormLayout(card);
 
-        // ── Action buttons (Remove / Move Up / Move Down) ────────
-        auto *btnRow = new QHBoxLayout;
+        // ── Action buttons (only for clip effects, not track effects) ──
+        if (!readOnly) {
+            auto *btnRow = new QHBoxLayout;
 
-        auto *btnRemove = new QPushButton(tr("Remove"), card);
-        btnRemove->setAccessibleName(
-            tr("Remove effect %1").arg(effect->displayName()));
-        connect(btnRemove, &QPushButton::clicked,
-                this, [this, i]() {
-                    if (!m_currentClip) return;
-                    m_undoStack->push(
-                        new RemoveEffectCommand(m_currentClip, i));
-                    populateEffects(m_currentClip->effects());
-                    emit effectChanged();
-                });
-        btnRow->addWidget(btnRemove);
+            auto *btnRemove = new QPushButton(tr("Remove"), card);
+            btnRemove->setAccessibleName(
+                tr("Remove effect %1").arg(effect->displayName()));
+            connect(btnRemove, &QPushButton::clicked,
+                    this, [this, i]() {
+                        if (!m_currentClip) return;
+                        m_undoStack->push(
+                            new RemoveEffectCommand(m_currentClip, i));
+                        populateEffects(m_currentClip->effects());
+                        emit effectChanged();
+                    });
+            btnRow->addWidget(btnRemove);
 
-        auto *btnUp = new QPushButton(tr("Up"), card);
-        btnUp->setAccessibleName(
-            tr("Move %1 up").arg(effect->displayName()));
-        btnUp->setEnabled(i > 0);
-        connect(btnUp, &QPushButton::clicked,
-                this, [this, i]() {
-                    if (!m_currentClip || i <= 0) return;
-                    m_undoStack->push(
-                        new MoveEffectCommand(m_currentClip, i, i - 1));
-                    populateEffects(m_currentClip->effects());
-                    emit effectChanged();
-                });
-        btnRow->addWidget(btnUp);
+            auto *btnUp = new QPushButton(tr("Up"), card);
+            btnUp->setAccessibleName(
+                tr("Move %1 up").arg(effect->displayName()));
+            btnUp->setEnabled(i > 0);
+            connect(btnUp, &QPushButton::clicked,
+                    this, [this, i]() {
+                        if (!m_currentClip || i <= 0) return;
+                        m_undoStack->push(
+                            new MoveEffectCommand(m_currentClip, i, i - 1));
+                        populateEffects(m_currentClip->effects());
+                        emit effectChanged();
+                    });
+            btnRow->addWidget(btnUp);
 
-        auto *btnDown = new QPushButton(tr("Down"), card);
-        btnDown->setAccessibleName(
-            tr("Move %1 down").arg(effect->displayName()));
-        btnDown->setEnabled(i < effects.size() - 1);
-        connect(btnDown, &QPushButton::clicked,
-                this, [this, i]() {
-                    if (!m_currentClip) return;
-                    if (i >= m_currentClip->effects().size() - 1) return;
-                    m_undoStack->push(
-                        new MoveEffectCommand(m_currentClip, i, i + 1));
-                    populateEffects(m_currentClip->effects());
-                    emit effectChanged();
-                });
-        btnRow->addWidget(btnDown);
-        btnRow->addStretch();
-        cardLayout->addRow(btnRow);
+            auto *btnDown = new QPushButton(tr("Down"), card);
+            btnDown->setAccessibleName(
+                tr("Move %1 down").arg(effect->displayName()));
+            btnDown->setEnabled(i < effects.size() - 1);
+            connect(btnDown, &QPushButton::clicked,
+                    this, [this, i]() {
+                        if (!m_currentClip) return;
+                        if (i >= m_currentClip->effects().size() - 1) return;
+                        m_undoStack->push(
+                            new MoveEffectCommand(m_currentClip, i, i + 1));
+                        populateEffects(m_currentClip->effects());
+                        emit effectChanged();
+                    });
+            btnRow->addWidget(btnDown);
+            btnRow->addStretch();
+            cardLayout->addRow(btnRow);
+        }
 
         // Enabled toggle
         auto *enabledCb = new QCheckBox(tr("Enabled"), card);

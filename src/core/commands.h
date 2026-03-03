@@ -488,4 +488,22 @@ private:
     Track *m_track;
 };
 
+// ---------------------------------------------------------------------------
+// SoloTrackCommand – undoable solo/unsolo that captures all mute states
+// ---------------------------------------------------------------------------
+class SoloTrackCommand : public QUndoCommand
+{
+public:
+    SoloTrackCommand(Timeline *timeline, int soloIndex,
+                     QUndoCommand *parent = nullptr);
+    void undo() override;
+    void redo() override;
+
+private:
+    Timeline          *m_timeline;
+    int                m_soloIndex;
+    QVector<bool>      m_previousMuteStates;
+    QVector<bool>      m_newMuteStates;
+};
+
 } // namespace Thrive

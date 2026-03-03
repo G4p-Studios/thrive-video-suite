@@ -32,7 +32,7 @@ TransportBar::TransportBar(PlaybackController *playback,
     m_btnPlayPause = makeButton(tr("▶"),  tr("Play / Pause"), tr("Toggle playback (K / Space)"));
     m_btnStepFwd   = makeButton(tr(">"),   tr("Step forward"), tr("Step one frame forward (.)"));
     m_btnFastFwd   = makeButton(tr(">>"),  tr("Fast forward"), tr("Fast forward playback (L)"));
-    m_btnStop      = makeButton(tr("■"),  tr("Stop"),         tr("Stop and return to start (S)"));
+    m_btnStop      = makeButton(tr("■"),  tr("Stop"),         tr("Stop and return to start"));
 
     m_timecodeLabel = new QLabel(QStringLiteral("00:00:00:00"), this);
     m_timecodeLabel->setAccessibleName(tr("Current timecode"));

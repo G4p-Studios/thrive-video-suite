@@ -864,6 +864,116 @@ private slots:
         QVERIFY(m_track->isLocked());
     }
 
+    // ── SoloTrackCommand ────────────────────────────────────────────
+
+    void soloTrackUndoRedo()
+    {
+        // Add a second track
+        auto *audio = new Track(QStringLiteral("Audio 1"), Track::Type::Audio);
+        m_timeline->addTrack(audio);
+
+        // Add a third track
+        auto *video2 = new Track(QStringLiteral("Video 2"), Track::Type::Video);
+        m_timeline->addTrack(video2);
+
+        // All unmuted initially
+        QVERIFY(!m_track->isMuted());
+        QVERIFY(!audio->isMuted());
+        QVERIFY(!video2->isMuted());
+
+        // Solo track 0 (Video 1) – should mute Audio 1 and Video 2
+        m_stack->push(new SoloTrackCommand(m_timeline, 0));
+        QVERIFY(!m_track->isMuted());   // soloed track stays unmuted
+        QVERIFY(audio->isMuted());      // others muted
+        QVERIFY(video2->isMuted());
+
+        // Undo → all tracks back to unmuted
+        m_stack->undo();
+        QVERIFY(!m_track->isMuted());
+        QVERIFY(!audio->isMuted());
+        QVERIFY(!video2->isMuted());
+
+        // Redo → solo again
+        m_stack->redo();
+        QVERIFY(!m_track->isMuted());
+        QVERIFY(audio->isMuted());
+        QVERIFY(video2->isMuted());
+
+        // Solo same track again → un-solo (all unmuted)
+        m_stack->push(new SoloTrackCommand(m_timeline, 0));
+        QVERIFY(!m_track->isMuted());
+        QVERIFY(!audio->isMuted());
+        QVERIFY(!video2->isMuted());
+
+        // Undo unsolo → back to soloed state
+        m_stack->undo();
+        QVERIFY(!m_track->isMuted());
+        QVERIFY(audio->isMuted());
+        QVERIFY(video2->isMuted());
+    }
+
+    // ── Clip::deepCopy ──────────────────────────────────────────────
+
+    void clipDeepCopy()
+    {
+        auto *src = new Clip(QStringLiteral("Source"), QStringLiteral("/vid.mp4"),
+                             TimeCode(10, 25.0), TimeCode(100, 25.0));
+        src->setDescription(QStringLiteral("Desc"));
+        src->setTimelinePosition(TimeCode(50, 25.0));
+
+        // Add effect with parameter
+        auto *fx = new Effect(QStringLiteral("blur"),
+                              QStringLiteral("Blur"), QStringLiteral("desc"));
+        fx->setEnabled(false);
+        EffectParameter p;
+        p.id = QStringLiteral("radius");
+        p.displayName = QStringLiteral("Radius");
+        p.type = QStringLiteral("float");
+        p.currentValue = 12.5;
+        fx->addParameter(p);
+        src->addEffect(fx);
+
+        // Add transition
+        auto *trans = new Transition(QStringLiteral("luma"),
+                                     QStringLiteral("Dissolve"),
+                                     QString(), TimeCode(25, 25.0));
+        src->setOutTransition(trans);
+
+        // Deep copy
+        auto *copy = Clip::deepCopy(src);
+        QVERIFY(copy != nullptr);
+        QVERIFY(copy != src);
+
+        // Verify all fields
+        QCOMPARE(copy->name(), QStringLiteral("Source"));
+        QCOMPARE(copy->sourcePath(), QStringLiteral("/vid.mp4"));
+        QCOMPARE(copy->description(), QStringLiteral("Desc"));
+        QCOMPARE(copy->inPoint().frame(), 10);
+        QCOMPARE(copy->outPoint().frame(), 100);
+        QCOMPARE(copy->timelinePosition().frame(), 50);
+
+        // Effects
+        QCOMPARE(copy->effects().size(), 1);
+        QCOMPARE(copy->effects().at(0)->serviceId(), QStringLiteral("blur"));
+        QCOMPARE(copy->effects().at(0)->isEnabled(), false);
+        QCOMPARE(copy->effects().at(0)->parameters().size(), 1);
+        QCOMPARE(copy->effects().at(0)->parameters().at(0).currentValue.toDouble(), 12.5);
+
+        // Transition
+        QVERIFY(copy->outTransition() != nullptr);
+        QVERIFY(copy->outTransition() != src->outTransition());
+        QCOMPARE(copy->outTransition()->serviceId(), QStringLiteral("luma"));
+        QCOMPARE(copy->outTransition()->duration().frame(), 25);
+        QVERIFY(copy->inTransition() == nullptr);
+
+        // Independence: modifying source doesn't affect copy
+        src->setName(QStringLiteral("Changed"));
+        QCOMPARE(copy->name(), QStringLiteral("Source"));
+
+        delete src;
+        delete copy;
+    }
+
 private:
     QUndoStack *m_stack    = nullptr;
     Timeline   *m_timeline = nullptr;

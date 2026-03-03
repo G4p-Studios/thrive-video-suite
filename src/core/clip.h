@@ -63,6 +63,11 @@ public:
     /// Screen reader: "Clip: Intro.mp4, 00:00:05 to 00:00:12, duration 7 seconds. 2 effects."
     [[nodiscard]] QString accessibleSummary() const;
 
+    /// Create an independent deep copy of this clip (including effects &
+    /// transitions).  The caller owns the returned pointer.
+    [[nodiscard]] static Clip *deepCopy(const Clip *source,
+                                        QObject *parent = nullptr);
+
 signals:
     void nameChanged(const QString &name);
     void timingChanged();

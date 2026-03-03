@@ -10,7 +10,6 @@
 #include "../core/clip.h"
 #include "../core/marker.h"
 #include "../core/timecode.h"
-#include "../accessibility/announcer.h"
 
 #include <QKeyEvent>
 #include <QAccessible>

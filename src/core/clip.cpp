@@ -145,4 +145,37 @@ QString Clip::accessibleSummary() const
     return summary;
 }
 
+Clip *Clip::deepCopy(const Clip *source, QObject *parent)
+{
+    if (!source)
+        return nullptr;
+
+    auto *copy = new Clip(source->name(), source->sourcePath(),
+                          source->inPoint(), source->outPoint(), parent);
+    copy->setTimelinePosition(source->timelinePosition());
+    copy->setDescription(source->description());
+
+    // Deep-copy effects
+    for (auto *fx : source->effects()) {
+        auto *fxCopy = new Effect(fx->serviceId(), fx->displayName(),
+                                  fx->description(), copy);
+        fxCopy->setEnabled(fx->isEnabled());
+        for (const auto &p : fx->parameters())
+            fxCopy->addParameter(p);
+        copy->addEffect(fxCopy);
+    }
+
+    // Deep-copy transitions
+    if (auto *t = source->outTransition())
+        copy->setOutTransition(
+            new Transition(t->serviceId(), t->displayName(),
+                           t->description(), t->duration(), copy));
+    if (auto *t = source->inTransition())
+        copy->setInTransition(
+            new Transition(t->serviceId(), t->displayName(),
+                           t->description(), t->duration(), copy));
+
+    return copy;
+}
+
 } // namespace Thrive

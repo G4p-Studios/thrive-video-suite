@@ -65,7 +65,8 @@ private:
     void buildClipForm();
     void buildEffectsSection();
     void buildTransitionsSection();
-    void populateEffects(const QVector<Effect *> &effects);
+    void populateEffects(const QVector<Effect *> &effects,
+                         bool readOnly = false);
     void populateTransitions(Clip *clip);
     void clearEffects();
     void clearTransitions();

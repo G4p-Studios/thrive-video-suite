@@ -831,4 +831,54 @@ void ToggleLockTrackCommand::redo()
     m_track->setLocked(!m_track->isLocked());
 }
 
+// =====================================================================
+// SoloTrackCommand
+// =====================================================================
+
+SoloTrackCommand::SoloTrackCommand(Timeline *timeline, int soloIndex,
+                                    QUndoCommand *parent)
+    : QUndoCommand(parent)
+    , m_timeline(timeline)
+    , m_soloIndex(soloIndex)
+{
+    // Capture the previous mute state of every track
+    for (int i = 0; i < m_timeline->trackCount(); ++i)
+        m_previousMuteStates.append(m_timeline->trackAt(i)->isMuted());
+
+    // Determine whether the track is already soloed
+    auto *cur = m_timeline->trackAt(m_soloIndex);
+    bool alreadySoloed = cur && !cur->isMuted();
+    for (int i = 0; alreadySoloed && i < m_timeline->trackCount(); ++i) {
+        if (i != m_soloIndex && !m_timeline->trackAt(i)->isMuted())
+            alreadySoloed = false;
+    }
+
+    if (alreadySoloed) {
+        // Un-solo: unmute everything
+        for (int i = 0; i < m_timeline->trackCount(); ++i)
+            m_newMuteStates.append(false);
+        setText(QObject::tr("Unsolo tracks"));
+    } else {
+        // Solo: mute everything except soloIndex
+        for (int i = 0; i < m_timeline->trackCount(); ++i)
+            m_newMuteStates.append(i != m_soloIndex);
+        setText(QObject::tr("Solo track \"%1\"").arg(
+            cur ? cur->name() : QString()));
+    }
+}
+
+void SoloTrackCommand::undo()
+{
+    for (int i = 0; i < m_previousMuteStates.size()
+                    && i < m_timeline->trackCount(); ++i)
+        m_timeline->trackAt(i)->setMuted(m_previousMuteStates.at(i));
+}
+
+void SoloTrackCommand::redo()
+{
+    for (int i = 0; i < m_newMuteStates.size()
+                    && i < m_timeline->trackCount(); ++i)
+        m_timeline->trackAt(i)->setMuted(m_newMuteStates.at(i));
+}
+
 } // namespace Thrive

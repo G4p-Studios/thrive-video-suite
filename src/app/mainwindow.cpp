@@ -469,31 +469,7 @@ void MainWindow::createActions()
         auto *src = trk->clipAt(idx);
         const QString clipName = src->name();
         delete m_clipboardClip;
-        m_clipboardClip = new Clip(src->name(), src->sourcePath(),
-                                   src->inPoint(), src->outPoint(), this);
-        m_clipboardClip->setTimelinePosition(src->timelinePosition());
-        m_clipboardClip->setDescription(src->description());
-        for (auto *fx : src->effects()) {
-            auto *fxCopy = new Effect(fx->serviceId(), fx->displayName(),
-                                      fx->description(), m_clipboardClip);
-            fxCopy->setEnabled(fx->isEnabled());
-            for (const auto &p : fx->parameters()) {
-                fxCopy->addParameter(p);
-            }
-            m_clipboardClip->addEffect(fxCopy);
-        }
-        if (auto *t = src->outTransition()) {
-            m_clipboardClip->setOutTransition(
-                new Transition(t->serviceId(), t->displayName(),
-                               t->description(), t->duration(),
-                               m_clipboardClip));
-        }
-        if (auto *t = src->inTransition()) {
-            m_clipboardClip->setInTransition(
-                new Transition(t->serviceId(), t->displayName(),
-                               t->description(), t->duration(),
-                               m_clipboardClip));
-        }
+        m_clipboardClip = Clip::deepCopy(src, this);
 
         m_undoStack->push(new RemoveClipCommand(trk, idx));
         m_modified = true;
@@ -514,31 +490,7 @@ void MainWindow::createActions()
         }
         auto *src = trk->clipAt(idx);
         delete m_clipboardClip;
-        m_clipboardClip = new Clip(src->name(), src->sourcePath(),
-                                   src->inPoint(), src->outPoint(), this);
-        m_clipboardClip->setTimelinePosition(src->timelinePosition());
-        m_clipboardClip->setDescription(src->description());
-        for (auto *fx : src->effects()) {
-            auto *fxCopy = new Effect(fx->serviceId(), fx->displayName(),
-                                      fx->description(), m_clipboardClip);
-            fxCopy->setEnabled(fx->isEnabled());
-            for (const auto &p : fx->parameters()) {
-                fxCopy->addParameter(p);
-            }
-            m_clipboardClip->addEffect(fxCopy);
-        }
-        if (auto *t = src->outTransition()) {
-            m_clipboardClip->setOutTransition(
-                new Transition(t->serviceId(), t->displayName(),
-                               t->description(), t->duration(),
-                               m_clipboardClip));
-        }
-        if (auto *t = src->inTransition()) {
-            m_clipboardClip->setInTransition(
-                new Transition(t->serviceId(), t->displayName(),
-                               t->description(), t->duration(),
-                               m_clipboardClip));
-        }
+        m_clipboardClip = Clip::deepCopy(src, this);
 
         m_announcer->announce(
             tr("Copied: %1").arg(src->name()), Announcer::Priority::Normal);
@@ -566,31 +518,8 @@ void MainWindow::createActions()
             return;
         }
         // Create a new clip from the clipboard data (deep copy)
-        auto *newClip = new Clip(m_clipboardClip->name(),
-                                 m_clipboardClip->sourcePath(),
-                                 m_clipboardClip->inPoint(),
-                                 m_clipboardClip->outPoint());
+        auto *newClip = Clip::deepCopy(m_clipboardClip);
         newClip->setTimelinePosition(tl->playheadPosition());
-        newClip->setDescription(m_clipboardClip->description());
-        for (auto *fx : m_clipboardClip->effects()) {
-            auto *fxCopy = new Effect(fx->serviceId(), fx->displayName(),
-                                      fx->description(), newClip);
-            fxCopy->setEnabled(fx->isEnabled());
-            for (const auto &p : fx->parameters()) {
-                fxCopy->addParameter(p);
-            }
-            newClip->addEffect(fxCopy);
-        }
-        if (auto *t = m_clipboardClip->outTransition()) {
-            newClip->setOutTransition(
-                new Transition(t->serviceId(), t->displayName(),
-                               t->description(), t->duration(), newClip));
-        }
-        if (auto *t = m_clipboardClip->inTransition()) {
-            newClip->setInTransition(
-                new Transition(t->serviceId(), t->displayName(),
-                               t->description(), t->duration(), newClip));
-        }
 
         m_undoStack->push(new AddClipCommand(trk, newClip));
         m_modified = true;
@@ -928,6 +857,9 @@ void MainWindow::createActions()
     m_actFrameBack->setShortcut(Qt::Key_Comma);
     connect(m_actFrameBack, &QAction::triggered, this, [this]() {
         m_playback->stepFrames(-1);
+        m_announcer->announce(
+            tr("Frame %1").arg(m_playback->position()),
+            Announcer::Priority::Low);
     });
     addAction(m_actFrameBack);
 
@@ -935,6 +867,9 @@ void MainWindow::createActions()
     m_actFrameForward->setShortcut(Qt::Key_Period);
     connect(m_actFrameForward, &QAction::triggered, this, [this]() {
         m_playback->stepFrames(1);
+        m_announcer->announce(
+            tr("Frame %1").arg(m_playback->position()),
+            Announcer::Priority::Low);
     });
     addAction(m_actFrameForward);
 
@@ -1073,22 +1008,19 @@ void MainWindow::createActions()
                 alreadySoloed = false;
         }
 
+        m_undoStack->push(
+            new SoloTrackCommand(tl, tl->currentTrackIndex()));
+        m_modified = true;
+        rebuildTractor();
+
         if (alreadySoloed) {
-            // Un-solo: unmute all tracks
-            for (int i = 0; i < tl->trackCount(); ++i)
-                tl->trackAt(i)->setMuted(false);
             m_announcer->announce(
                 tr("All tracks unmuted."), Announcer::Priority::High);
         } else {
-            // Solo: mute everything except current
-            for (int i = 0; i < tl->trackCount(); ++i)
-                tl->trackAt(i)->setMuted(i != tl->currentTrackIndex());
             m_announcer->announce(
                 tr("%1 soloed.").arg(cur->name()),
                 Announcer::Priority::High);
         }
-        m_modified = true;
-        rebuildTractor();
     });
 
     // ── Nudge clip position (frame-accurate repositioning) ────────
