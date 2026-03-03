@@ -10,6 +10,7 @@
 #include <QProgressBar>
 #include <QPushButton>
 #include <QVBoxLayout>
+#include <QAccessible>
 
 namespace Thrive {
 
@@ -61,6 +62,12 @@ void ExportProgressDialog::onProgress(int percent)
 {
     m_bar->setValue(percent);
     m_label->setText(tr("Rendering: %1%").arg(percent));
+
+    // Notify assistive technology of the value change
+    if (auto *iface = QAccessible::queryAccessibleInterface(m_bar)) {
+        QAccessibleValueChangeEvent ev(m_bar, percent);
+        QAccessible::updateAccessibility(&ev);
+    }
 
     // Announce at every 10% increment
     int bucket = (percent / 10) * 10;

@@ -558,6 +558,266 @@ private slots:
         delete copy;
     }
 
+    // ── AddTransitionCommand / RemoveTransitionCommand ──────────────
+
+    void addTransitionUndoRedo()
+    {
+        auto *clip = new Clip(QStringLiteral("TransClip"), {},
+                              TimeCode(0, 25.0), TimeCode(50, 25.0));
+        m_track->addClip(clip);
+
+        auto *trans = new Transition(QStringLiteral("luma"),
+                                     QStringLiteral("Dissolve"),
+                                     QStringLiteral("Cross dissolve"),
+                                     TimeCode(10, 25.0));
+
+        QVERIFY(clip->outTransition() == nullptr);
+
+        m_stack->push(new AddTransitionCommand(
+            clip, AddTransitionCommand::Edge::Out, trans));
+        QVERIFY(clip->outTransition() != nullptr);
+        QCOMPARE(clip->outTransition()->serviceId(), QStringLiteral("luma"));
+
+        m_stack->undo();
+        QVERIFY(clip->outTransition() == nullptr);
+
+        m_stack->redo();
+        QVERIFY(clip->outTransition() != nullptr);
+        QCOMPARE(clip->outTransition()->duration().frame(), 10);
+    }
+
+    void removeTransitionUndoRedo()
+    {
+        auto *clip = new Clip(QStringLiteral("TransClip"), {},
+                              TimeCode(0, 25.0), TimeCode(50, 25.0));
+        m_track->addClip(clip);
+
+        auto *trans = new Transition(QStringLiteral("wipe"),
+                                     QStringLiteral("Wipe"),
+                                     {},
+                                     TimeCode(15, 25.0));
+        clip->setInTransition(trans);
+        QVERIFY(clip->inTransition() != nullptr);
+
+        m_stack->push(new RemoveTransitionCommand(
+            clip, RemoveTransitionCommand::Edge::In));
+        QVERIFY(clip->inTransition() == nullptr);
+
+        m_stack->undo();
+        QVERIFY(clip->inTransition() != nullptr);
+        QCOMPARE(clip->inTransition()->serviceId(), QStringLiteral("wipe"));
+
+        m_stack->redo();
+        QVERIFY(clip->inTransition() == nullptr);
+    }
+
+    // ── SetEffectEnabledCommand ─────────────────────────────────────
+
+    void setEffectEnabledUndoRedo()
+    {
+        auto *clip = new Clip(QStringLiteral("FxClip"), {},
+                              TimeCode(), TimeCode(50, 25.0));
+        m_track->addClip(clip);
+
+        auto *fx = new Effect(QStringLiteral("blur"),
+                              QStringLiteral("Blur"), {});
+        clip->addEffect(fx);
+        QCOMPARE(fx->isEnabled(), true);
+
+        m_stack->push(new SetEffectEnabledCommand(fx, false));
+        QCOMPARE(fx->isEnabled(), false);
+
+        m_stack->undo();
+        QCOMPARE(fx->isEnabled(), true);
+
+        m_stack->redo();
+        QCOMPARE(fx->isEnabled(), false);
+    }
+
+    // ── ChangeEffectParameterCommand + merge ────────────────────────
+
+    void changeEffectParameterUndoRedo()
+    {
+        auto *clip = new Clip(QStringLiteral("ParamClip"), {},
+                              TimeCode(), TimeCode(50, 25.0));
+        m_track->addClip(clip);
+
+        auto *fx = new Effect(QStringLiteral("brightness"),
+                              QStringLiteral("Brightness"), {});
+        EffectParameter p;
+        p.id = QStringLiteral("level");
+        p.displayName = QStringLiteral("Level");
+        p.type = QStringLiteral("float");
+        p.defaultValue = 1.0;
+        p.currentValue = 1.0;
+        p.minimum = 0.0;
+        p.maximum = 2.0;
+        fx->addParameter(p);
+        clip->addEffect(fx);
+
+        m_stack->push(new ChangeEffectParameterCommand(
+            fx, QStringLiteral("level"), 1.5));
+        QCOMPARE(fx->parameterValue(QStringLiteral("level")).toDouble(), 1.5);
+
+        m_stack->undo();
+        QCOMPARE(fx->parameterValue(QStringLiteral("level")).toDouble(), 1.0);
+    }
+
+    void changeEffectParameterMerge()
+    {
+        auto *clip = new Clip(QStringLiteral("MergeClip"), {},
+                              TimeCode(), TimeCode(50, 25.0));
+        m_track->addClip(clip);
+
+        auto *fx = new Effect(QStringLiteral("volume"),
+                              QStringLiteral("Volume"), {});
+        EffectParameter p;
+        p.id = QStringLiteral("gain");
+        p.displayName = QStringLiteral("Gain");
+        p.type = QStringLiteral("float");
+        p.defaultValue = 0.0;
+        p.currentValue = 0.0;
+        p.minimum = -60.0;
+        p.maximum = 20.0;
+        fx->addParameter(p);
+        clip->addEffect(fx);
+
+        m_stack->push(new ChangeEffectParameterCommand(
+            fx, QStringLiteral("gain"), 5.0));
+        m_stack->push(new ChangeEffectParameterCommand(
+            fx, QStringLiteral("gain"), 10.0));
+
+        // Merged: single undo restores to original 0.0
+        QCOMPARE(fx->parameterValue(QStringLiteral("gain")).toDouble(), 10.0);
+        m_stack->undo();
+        QCOMPARE(fx->parameterValue(QStringLiteral("gain")).toDouble(), 0.0);
+    }
+
+    // ── MoveTrackCommand ────────────────────────────────────────────
+
+    void moveTrackUndoRedo()
+    {
+        auto *audio = new Track(QStringLiteral("Audio 1"), Track::Type::Audio);
+        m_timeline->addTrack(audio);
+        // Timeline now has [Video 1, Audio 1] at indices 0, 1
+        QCOMPARE(m_timeline->trackAt(0)->name(), QStringLiteral("Video 1"));
+        QCOMPARE(m_timeline->trackAt(1)->name(), QStringLiteral("Audio 1"));
+
+        m_stack->push(new MoveTrackCommand(m_timeline, 0, 1));
+        QCOMPARE(m_timeline->trackAt(0)->name(), QStringLiteral("Audio 1"));
+        QCOMPARE(m_timeline->trackAt(1)->name(), QStringLiteral("Video 1"));
+
+        m_stack->undo();
+        QCOMPARE(m_timeline->trackAt(0)->name(), QStringLiteral("Video 1"));
+        QCOMPARE(m_timeline->trackAt(1)->name(), QStringLiteral("Audio 1"));
+    }
+
+    // ── RenameClipCommand ───────────────────────────────────────────
+
+    void renameClipUndoRedo()
+    {
+        auto *clip = new Clip(QStringLiteral("Original"), {},
+                              TimeCode(), TimeCode(50, 25.0));
+        m_track->addClip(clip);
+        QCOMPARE(clip->name(), QStringLiteral("Original"));
+
+        m_stack->push(new RenameClipCommand(clip, QStringLiteral("Renamed")));
+        QCOMPARE(clip->name(), QStringLiteral("Renamed"));
+
+        m_stack->undo();
+        QCOMPARE(clip->name(), QStringLiteral("Original"));
+
+        m_stack->redo();
+        QCOMPARE(clip->name(), QStringLiteral("Renamed"));
+    }
+
+    // ── ChangeClipDescriptionCommand ────────────────────────────────
+
+    void changeClipDescriptionUndoRedo()
+    {
+        auto *clip = new Clip(QStringLiteral("DescClip"), {},
+                              TimeCode(), TimeCode(50, 25.0));
+        clip->setDescription(QStringLiteral("Old description"));
+        m_track->addClip(clip);
+
+        m_stack->push(new ChangeClipDescriptionCommand(
+            clip, QStringLiteral("New description")));
+        QCOMPARE(clip->description(), QStringLiteral("New description"));
+
+        m_stack->undo();
+        QCOMPARE(clip->description(), QStringLiteral("Old description"));
+    }
+
+    // ── NudgeClipPositionCommand ────────────────────────────────────
+
+    void nudgeClipPositionUndoRedo()
+    {
+        auto *clip = new Clip(QStringLiteral("NudgeClip"), {},
+                              TimeCode(0, 25.0), TimeCode(50, 25.0));
+        clip->setTimelinePosition(TimeCode(100, 25.0));
+        m_track->addClip(clip);
+
+        m_stack->push(new NudgeClipPositionCommand(
+            clip, TimeCode(101, 25.0)));
+        QCOMPARE(clip->timelinePosition().frame(), 101);
+
+        m_stack->undo();
+        QCOMPARE(clip->timelinePosition().frame(), 100);
+
+        m_stack->redo();
+        QCOMPARE(clip->timelinePosition().frame(), 101);
+    }
+
+    void nudgeClipPositionMerge()
+    {
+        auto *clip = new Clip(QStringLiteral("NudgeClip"), {},
+                              TimeCode(0, 25.0), TimeCode(50, 25.0));
+        clip->setTimelinePosition(TimeCode(100, 25.0));
+        m_track->addClip(clip);
+
+        m_stack->push(new NudgeClipPositionCommand(
+            clip, TimeCode(101, 25.0)));
+        m_stack->push(new NudgeClipPositionCommand(
+            clip, TimeCode(102, 25.0)));
+        m_stack->push(new NudgeClipPositionCommand(
+            clip, TimeCode(103, 25.0)));
+
+        // All three merged: single undo restores to 100
+        QCOMPARE(clip->timelinePosition().frame(), 103);
+        m_stack->undo();
+        QCOMPARE(clip->timelinePosition().frame(), 100);
+    }
+
+    // ── SplitClipCommand with non-zero inPoint (source offset fix) ──
+
+    void splitClipSourceOffset()
+    {
+        // Clip with inPoint=20, outPoint=120, at timeline position 200
+        auto *clip = new Clip(QStringLiteral("Offset"), {},
+                              TimeCode(20, 25.0), TimeCode(120, 25.0));
+        clip->setTimelinePosition(TimeCode(200, 25.0));
+        m_track->addClip(clip);
+
+        // Split at timeline frame 250 → 50 frames into the clip
+        // Source split should be inPoint(20) + 50 = 70
+        m_stack->push(new SplitClipCommand(m_track, 0, TimeCode(250, 25.0)));
+
+        QCOMPARE(m_track->clipCount(), 2);
+        // Original: in=20, out=70 (source-relative)
+        QCOMPARE(m_track->clipAt(0)->inPoint().frame(), 20);
+        QCOMPARE(m_track->clipAt(0)->outPoint().frame(), 70);
+        // New clip: in=70, out=120 (source-relative)
+        QCOMPARE(m_track->clipAt(1)->inPoint().frame(), 70);
+        QCOMPARE(m_track->clipAt(1)->outPoint().frame(), 120);
+        // New clip is placed at the split timeline position
+        QCOMPARE(m_track->clipAt(1)->timelinePosition().frame(), 250);
+
+        m_stack->undo();
+        QCOMPARE(m_track->clipCount(), 1);
+        QCOMPARE(m_track->clipAt(0)->inPoint().frame(), 20);
+        QCOMPARE(m_track->clipAt(0)->outPoint().frame(), 120);
+    }
+
 private:
     QUndoStack *m_stack    = nullptr;
     Timeline   *m_timeline = nullptr;

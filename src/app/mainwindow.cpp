@@ -898,14 +898,20 @@ void MainWindow::createActions()
 
     m_actJRewind = new QAction(tr("Rewind (J)"), this);
     m_actJRewind->setShortcut(Qt::Key_J);
-    connect(m_actJRewind, &QAction::triggered,
-            m_playback, &PlaybackController::playReverse);
+    connect(m_actJRewind, &QAction::triggered, this, [this]() {
+        m_playback->playReverse();
+        m_announcer->announce(tr("Rewinding"),
+                              Announcer::Priority::High);
+    });
     addAction(m_actJRewind);
 
     m_actLForward = new QAction(tr("Fast Forward (L)"), this);
     m_actLForward->setShortcut(Qt::Key_L);
-    connect(m_actLForward, &QAction::triggered,
-            m_playback, &PlaybackController::playForward);
+    connect(m_actLForward, &QAction::triggered, this, [this]() {
+        m_playback->playForward();
+        m_announcer->announce(tr("Fast forwarding"),
+                              Announcer::Priority::High);
+    });
     addAction(m_actLForward);
 
     m_actFrameBack = new QAction(tr("Step Frame Back"), this);
@@ -1099,8 +1105,8 @@ void MainWindow::createActions()
             m_cues->play(AudioCueManager::Cue::Error);
             return;
         }
-        clip->setTimelinePosition(
-            TimeCode(frame - 1, m_project->fps()));
+        m_undoStack->push(new NudgeClipPositionCommand(
+            clip, TimeCode(frame - 1, m_project->fps())));
         m_modified = true;
         rebuildTractor();
         m_announcer->announce(
@@ -1126,8 +1132,9 @@ void MainWindow::createActions()
             return;
         }
         auto *clip = trk->clipAt(idx);
-        clip->setTimelinePosition(
-            TimeCode(clip->timelinePosition().frame() + 1, m_project->fps()));
+        m_undoStack->push(new NudgeClipPositionCommand(
+            clip, TimeCode(clip->timelinePosition().frame() + 1,
+                           m_project->fps())));
         m_modified = true;
         rebuildTractor();
         m_announcer->announce(
@@ -1222,18 +1229,24 @@ void MainWindow::createDockWidgets()
     auto *transportDock = new QDockWidget(tr("Transport"), this);
     transportDock->setWidget(m_transport);
     transportDock->setFeatures(QDockWidget::DockWidgetMovable);
+    transportDock->setAccessibleDescription(
+        tr("Transport controls. Space to play/pause, J to rewind, L to fast forward."));
     addDockWidget(Qt::BottomDockWidgetArea, transportDock);
 
     // Media browser (left)
     m_media = new MediaBrowser(m_announcer, m_engine, this);
     auto *mediaDock = new QDockWidget(tr("Media"), this);
     mediaDock->setWidget(m_media);
+    mediaDock->setAccessibleDescription(
+        tr("Media browser. Browse and import media files into your project."));
     addDockWidget(Qt::LeftDockWidgetArea, mediaDock);
 
     // Properties panel (right)
     m_properties = new PropertiesPanel(m_announcer, m_undoStack, this);
     auto *propDock = new QDockWidget(tr("Properties"), this);
     propDock->setWidget(m_properties);
+    propDock->setAccessibleDescription(
+        tr("Properties panel. Ctrl+P to focus. Shows details for the selected clip or track."));
     addDockWidget(Qt::RightDockWidgetArea, propDock);
 
     // Rebuild tractor when a clip is trimmed from the properties panel
@@ -1248,6 +1261,8 @@ void MainWindow::createDockWidgets()
     m_effects = new EffectsBrowser(m_catalog, m_announcer, this);
     auto *effectsDock = new QDockWidget(tr("Effects"), this);
     effectsDock->setWidget(m_effects);
+    effectsDock->setAccessibleDescription(
+        tr("Effects browser. Browse and apply audio and video effects."));
     tabifyDockWidget(propDock, effectsDock);
 
     // Wire timeline selection → properties

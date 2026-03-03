@@ -38,6 +38,12 @@ void AddClipCommand::redo()
     m_ownsClip = false;
 }
 
+AddClipCommand::~AddClipCommand()
+{
+    if (m_ownsClip)
+        delete m_clip;
+}
+
 // ===========================================================================
 // RemoveClipCommand
 // ===========================================================================
@@ -68,6 +74,12 @@ void RemoveClipCommand::redo()
         m_track->removeClip(m_index);
         m_ownsClip = true;
     }
+}
+
+RemoveClipCommand::~RemoveClipCommand()
+{
+    if (m_ownsClip)
+        delete m_clip;
 }
 
 // ===========================================================================
@@ -156,6 +168,13 @@ void SplitClipCommand::undo()
     m_executed = false;
 }
 
+SplitClipCommand::~SplitClipCommand()
+{
+    // If undone (m_executed == false) and we created a new clip, we own it
+    if (!m_executed)
+        delete m_newClip;
+}
+
 void SplitClipCommand::redo()
 {
     auto *original = m_track->clipAt(m_clipIndex);
@@ -165,10 +184,17 @@ void SplitClipCommand::redo()
         // First redo — capture state and create the split clip
         m_originalOut = original->outPoint();
 
+        // Compute source-relative split point:
+        // The split point is a timeline position; convert to source offset
+        const int64_t timelineOffset =
+            m_splitPoint.frame() - original->timelinePosition().frame();
+        const double fps = m_splitPoint.fps();
+        TimeCode sourceSplit(original->inPoint().frame() + timelineOffset, fps);
+
         m_newClip = new Clip(
             original->name() + QObject::tr(" (split)"),
             original->sourcePath(),
-            m_splitPoint,
+            sourceSplit,
             m_originalOut);
 
         // Deep-copy effects from original to new clip
@@ -194,8 +220,14 @@ void SplitClipCommand::redo()
     // Place the new clip at the split position on the timeline
     m_newClip->setTimelinePosition(m_splitPoint);
 
-    // Trim original to end at split point
-    original->setOutPoint(m_splitPoint);
+    // Compute source-relative split for trimming the original
+    const int64_t timelineOffset =
+        m_splitPoint.frame() - original->timelinePosition().frame();
+    const double fps = m_splitPoint.fps();
+    TimeCode sourceSplit(original->inPoint().frame() + timelineOffset, fps);
+
+    // Trim original to end at the source split point
+    original->setOutPoint(sourceSplit);
 
     // Insert new clip after the original
     m_track->insertClip(m_clipIndex + 1, m_newClip);
@@ -227,6 +259,12 @@ void AddTrackCommand::redo()
 {
     m_timeline->insertTrack(m_index, m_track);
     m_ownsTrack = false;
+}
+
+AddTrackCommand::~AddTrackCommand()
+{
+    if (m_ownsTrack)
+        delete m_track;
 }
 
 // ===========================================================================
@@ -261,6 +299,12 @@ void RemoveTrackCommand::redo()
     }
 }
 
+RemoveTrackCommand::~RemoveTrackCommand()
+{
+    if (m_ownsTrack)
+        delete m_track;
+}
+
 // ===========================================================================
 // AddEffectCommand
 // ===========================================================================
@@ -288,6 +332,12 @@ void AddEffectCommand::redo()
 {
     m_clip->addEffect(m_effect);
     m_ownsEffect = false;
+}
+
+AddEffectCommand::~AddEffectCommand()
+{
+    if (m_ownsEffect)
+        delete m_effect;
 }
 
 // ===========================================================================
@@ -322,6 +372,12 @@ void RemoveEffectCommand::redo()
     }
 }
 
+RemoveEffectCommand::~RemoveEffectCommand()
+{
+    if (m_ownsEffect)
+        delete m_effect;
+}
+
 // ===========================================================================
 // AddMarkerCommand
 // ===========================================================================
@@ -344,6 +400,7 @@ void AddMarkerCommand::undo()
     if (m_insertedIndex >= 0) {
         m_timeline->removeMarker(m_insertedIndex);
         // m_marker is now unparented and owned by this command
+        m_ownsMarker = true;
     }
 }
 
@@ -353,6 +410,13 @@ void AddMarkerCommand::redo()
         m_marker = new Marker(m_name, m_position, m_comment);
     m_timeline->addMarker(m_marker);
     m_insertedIndex = m_timeline->markers().size() - 1;
+    m_ownsMarker = false;
+}
+
+AddMarkerCommand::~AddMarkerCommand()
+{
+    if (m_ownsMarker)
+        delete m_marker;
 }
 
 // ===========================================================================
@@ -380,12 +444,20 @@ void RemoveMarkerCommand::undo()
     if (!m_marker)
         m_marker = new Marker(m_name, m_position, m_comment);
     m_timeline->insertMarker(m_index, m_marker);
+    m_ownsMarker = false;
 }
 
 void RemoveMarkerCommand::redo()
 {
     m_timeline->removeMarker(m_index);
     // m_marker is now unparented and owned by this command
+    m_ownsMarker = true;
+}
+
+RemoveMarkerCommand::~RemoveMarkerCommand()
+{
+    if (m_ownsMarker)
+        delete m_marker;
 }
 
 // ===========================================================================
@@ -410,6 +482,7 @@ void AddTransitionCommand::undo()
         m_clip->setInTransition(m_oldTransition);
     else
         m_clip->setOutTransition(m_oldTransition);
+    m_ownsTransition = true;
 }
 
 void AddTransitionCommand::redo()
@@ -420,6 +493,13 @@ void AddTransitionCommand::redo()
         m_clip->setInTransition(m_transition);
     else
         m_clip->setOutTransition(m_transition);
+    m_ownsTransition = false;
+}
+
+AddTransitionCommand::~AddTransitionCommand()
+{
+    if (m_ownsTransition)
+        delete m_transition;
 }
 
 // ===========================================================================
@@ -442,6 +522,7 @@ void RemoveTransitionCommand::undo()
         m_clip->setInTransition(m_transition);
     else
         m_clip->setOutTransition(m_transition);
+    m_ownsTransition = false;
 }
 
 void RemoveTransitionCommand::redo()
@@ -452,6 +533,13 @@ void RemoveTransitionCommand::redo()
         m_clip->setInTransition(nullptr);
     else
         m_clip->setOutTransition(nullptr);
+    m_ownsTransition = true;
+}
+
+RemoveTransitionCommand::~RemoveTransitionCommand()
+{
+    if (m_ownsTransition)
+        delete m_transition;
 }
 
 // ===========================================================================
@@ -623,6 +711,43 @@ MoveEffectCommand::MoveEffectCommand(Clip *clip, int fromIndex, int toIndex,
 
 void MoveEffectCommand::undo()  { m_clip->moveEffect(m_to, m_from); }
 void MoveEffectCommand::redo()  { m_clip->moveEffect(m_from, m_to); }
+
+// ===========================================================================
+// NudgeClipPositionCommand
+// ===========================================================================
+NudgeClipPositionCommand::NudgeClipPositionCommand(
+        Clip *clip, const TimeCode &newPosition, QUndoCommand *parent)
+    : QUndoCommand(parent)
+    , m_clip(clip)
+    , m_oldPosition(clip->timelinePosition())
+    , m_newPosition(newPosition)
+{
+    setText(QObject::tr("Nudge clip \"%1\"").arg(clip->name()));
+}
+
+void NudgeClipPositionCommand::undo()
+{
+    m_clip->setTimelinePosition(m_oldPosition);
+}
+
+void NudgeClipPositionCommand::redo()
+{
+    m_clip->setTimelinePosition(m_newPosition);
+}
+
+int NudgeClipPositionCommand::id() const
+{
+    return 1003;  // unique ID for merge support
+}
+
+bool NudgeClipPositionCommand::mergeWith(const QUndoCommand *other)
+{
+    auto *cmd = dynamic_cast<const NudgeClipPositionCommand *>(other);
+    if (!cmd) return false;
+    if (cmd->m_clip != m_clip) return false;
+    m_newPosition = cmd->m_newPosition;
+    return true;
+}
 
 // ===========================================================================
 // ChangeTransitionDurationCommand

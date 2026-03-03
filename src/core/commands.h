@@ -25,6 +25,7 @@ class AddClipCommand : public QUndoCommand
 public:
     AddClipCommand(Track *track, Clip *clip, int index = -1,
                    QUndoCommand *parent = nullptr);
+    ~AddClipCommand() override;
     void undo() override;
     void redo() override;
 
@@ -43,6 +44,7 @@ class RemoveClipCommand : public QUndoCommand
 public:
     RemoveClipCommand(Track *track, int clipIndex,
                       QUndoCommand *parent = nullptr);
+    ~RemoveClipCommand() override;
     void undo() override;
     void redo() override;
 
@@ -98,6 +100,7 @@ class SplitClipCommand : public QUndoCommand
 public:
     SplitClipCommand(Track *track, int clipIndex, const TimeCode &splitPoint,
                      QUndoCommand *parent = nullptr);
+    ~SplitClipCommand() override;
     void undo() override;
     void redo() override;
 
@@ -118,6 +121,7 @@ class AddTrackCommand : public QUndoCommand
 public:
     AddTrackCommand(Timeline *timeline, Track *track, int index = -1,
                     QUndoCommand *parent = nullptr);
+    ~AddTrackCommand() override;
     void undo() override;
     void redo() override;
 
@@ -136,6 +140,7 @@ class RemoveTrackCommand : public QUndoCommand
 public:
     RemoveTrackCommand(Timeline *timeline, int trackIndex,
                        QUndoCommand *parent = nullptr);
+    ~RemoveTrackCommand() override;
     void undo() override;
     void redo() override;
 
@@ -154,6 +159,7 @@ class AddEffectCommand : public QUndoCommand
 public:
     AddEffectCommand(Clip *clip, Effect *effect,
                      QUndoCommand *parent = nullptr);
+    ~AddEffectCommand() override;
     void undo() override;
     void redo() override;
 
@@ -171,6 +177,7 @@ class RemoveEffectCommand : public QUndoCommand
 public:
     RemoveEffectCommand(Clip *clip, int effectIndex,
                         QUndoCommand *parent = nullptr);
+    ~RemoveEffectCommand() override;
     void undo() override;
     void redo() override;
 
@@ -190,6 +197,7 @@ public:
     AddMarkerCommand(Timeline *timeline, const QString &name,
                      const TimeCode &position, const QString &comment = {},
                      QUndoCommand *parent = nullptr);
+    ~AddMarkerCommand() override;
     void undo() override;
     void redo() override;
 
@@ -200,6 +208,7 @@ private:
     QString   m_comment;
     Marker   *m_marker = nullptr;
     int       m_insertedIndex = -1;
+    bool      m_ownsMarker = false;
 };
 
 // ---------------------------------------------------------------------------
@@ -210,6 +219,7 @@ class RemoveMarkerCommand : public QUndoCommand
 public:
     RemoveMarkerCommand(Timeline *timeline, int markerIndex,
                         QUndoCommand *parent = nullptr);
+    ~RemoveMarkerCommand() override;
     void undo() override;
     void redo() override;
 
@@ -220,6 +230,7 @@ private:
     TimeCode  m_position;
     QString   m_comment;
     Marker   *m_marker = nullptr;
+    bool      m_ownsMarker = false;
 };
 
 // ---------------------------------------------------------------------------
@@ -232,6 +243,7 @@ public:
 
     AddTransitionCommand(Clip *clip, Edge edge, Transition *transition,
                          QUndoCommand *parent = nullptr);
+    ~AddTransitionCommand() override;
     void undo() override;
     void redo() override;
 
@@ -240,6 +252,7 @@ private:
     Edge        m_edge;
     Transition *m_transition;
     Transition *m_oldTransition = nullptr;
+    bool        m_ownsTransition = false;
 };
 
 // ---------------------------------------------------------------------------
@@ -252,6 +265,7 @@ public:
 
     RemoveTransitionCommand(Clip *clip, Edge edge,
                             QUndoCommand *parent = nullptr);
+    ~RemoveTransitionCommand() override;
     void undo() override;
     void redo() override;
 
@@ -259,6 +273,7 @@ private:
     Clip       *m_clip;
     Edge        m_edge;
     Transition *m_transition = nullptr;
+    bool        m_ownsTransition = false;
 };
 
 // ---------------------------------------------------------------------------
@@ -402,6 +417,25 @@ private:
     Clip *m_clip;
     int   m_from;
     int   m_to;
+};
+
+// ---------------------------------------------------------------------------
+// NudgeClipPositionCommand – undoable small position adjustment
+// ---------------------------------------------------------------------------
+class NudgeClipPositionCommand : public QUndoCommand
+{
+public:
+    NudgeClipPositionCommand(Clip *clip, const TimeCode &newPosition,
+                             QUndoCommand *parent = nullptr);
+    void undo() override;
+    void redo() override;
+    int  id()   const override;
+    bool mergeWith(const QUndoCommand *other) override;
+
+private:
+    Clip    *m_clip;
+    TimeCode m_oldPosition;
+    TimeCode m_newPosition;
 };
 
 // ---------------------------------------------------------------------------

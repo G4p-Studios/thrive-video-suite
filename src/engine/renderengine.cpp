@@ -11,6 +11,7 @@
 
 #include <QTimer>
 #include <QTemporaryFile>
+#include <QFile>
 
 namespace Thrive {
 
@@ -35,6 +36,8 @@ bool RenderEngine::startRender(Mlt::Producer *producer,
 {
     if (m_rendering || !m_engine || !m_engine->isInitialized() || !producer)
         return false;
+
+    m_outputPath = outputPath;
 
     // Clone the producer via XML so that edits to the live timeline
     // during export don't corrupt the render pipeline.
@@ -134,10 +137,14 @@ void RenderEngine::cancelRender()
     if (m_renderConsumer && m_rendering) {
         m_renderConsumer->stop();
         m_rendering = false;
+        // Remove partial output file
+        if (!m_outputPath.isEmpty())
+            QFile::remove(m_outputPath);
         emit renderFinished(false);
     }
     m_renderConsumer.reset();
     m_clonedProducer.reset();
+    m_outputPath.clear();
 }
 
 int RenderEngine::progressPercent() const
