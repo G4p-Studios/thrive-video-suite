@@ -39,6 +39,9 @@ private slots:
     void onCurrentChanged(QListWidgetItem *current,
                           QListWidgetItem *previous);
 
+protected:
+    bool eventFilter(QObject *obj, QEvent *event) override;
+
 private:
     void populateList(const QString &filter = {});
 

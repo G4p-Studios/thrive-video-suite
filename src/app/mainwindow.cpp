@@ -49,6 +49,7 @@
 #include <QCloseEvent>
 #include <QKeyEvent>
 #include <QSettings>
+#include <QAbstractItemView>
 #include <QApplication>
 #include <QTimer>
 #include <QStandardPaths>
@@ -184,7 +185,8 @@ bool MainWindow::event(QEvent *ev)
             if (fw && (qobject_cast<QAbstractButton *>(fw) ||
                        qobject_cast<QComboBox *>(fw) ||
                        qobject_cast<QAbstractSpinBox *>(fw) ||
-                       qobject_cast<QLineEdit *>(fw))) {
+                       qobject_cast<QLineEdit *>(fw) ||
+                       qobject_cast<QAbstractItemView *>(fw))) {
                 ev->accept();   // let the widget handle the key
                 return true;
             }

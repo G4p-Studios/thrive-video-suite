@@ -14,6 +14,7 @@
 #include <QHBoxLayout>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QKeyEvent>
 
 namespace Thrive {
 
@@ -52,6 +53,11 @@ MediaBrowser::MediaBrowser(Announcer *announcer, MltEngine *engine,
             this, &MediaBrowser::onItemActivated);
     connect(m_list, &QListWidget::currentItemChanged,
             this, &MediaBrowser::onCurrentChanged);
+
+    // Ensure Ctrl+I / dock focus goes straight to the list widget,
+    // and handle Enter robustly via an event filter.
+    setFocusProxy(m_list);
+    m_list->installEventFilter(this);
 }
 
 QStringList MediaBrowser::files() const
@@ -117,6 +123,11 @@ void MediaBrowser::importFiles()
         }
     }
 
+    // Make the last imported item current so Enter immediately works
+    if (m_list->count() > 0)
+        m_list->setCurrentRow(m_list->count() - 1);
+    m_list->setFocus();
+
     const int count = paths.size();
     m_announcer->announce(
         tr("%n file(s) imported.", nullptr, count),
@@ -135,6 +146,25 @@ void MediaBrowser::removeSelected()
     delete m_list->takeItem(m_list->row(item));
     m_announcer->announce(
         tr("%1 removed.").arg(name), Announcer::Priority::Normal);
+}
+
+// ── Enter-key event filter ────────────────────────────────────────
+// QListWidget::itemActivated may not fire reliably in all focus /
+// shortcut-override scenarios.  Catch Enter here so the media
+// browser always responds.
+bool MediaBrowser::eventFilter(QObject *obj, QEvent *event)
+{
+    if (obj == m_list && event->type() == QEvent::KeyPress) {
+        auto *ke = static_cast<QKeyEvent *>(event);
+        if (ke->key() == Qt::Key_Return || ke->key() == Qt::Key_Enter) {
+            auto *item = m_list->currentItem();
+            if (item) {
+                onItemActivated(item);
+                return true;   // consumed
+            }
+        }
+    }
+    return QWidget::eventFilter(obj, event);
 }
 
 void MediaBrowser::onItemActivated(QListWidgetItem *item)

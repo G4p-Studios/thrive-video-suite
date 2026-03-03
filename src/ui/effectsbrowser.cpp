@@ -10,6 +10,7 @@
 #include <QPushButton>
 #include <QLabel>
 #include <QVBoxLayout>
+#include <QKeyEvent>
 
 namespace Thrive {
 
@@ -50,6 +51,9 @@ EffectsBrowser::EffectsBrowser(EffectCatalog *catalog,
     connect(m_list, &QListWidget::currentItemChanged,
             this, &EffectsBrowser::onCurrentChanged);
 
+    setFocusProxy(m_searchField);
+    m_list->installEventFilter(this);
+
     populateList();
 }
 
@@ -76,6 +80,21 @@ void EffectsBrowser::populateList(const QString &filter)
 void EffectsBrowser::onSearchTextChanged(const QString &text)
 {
     populateList(text);
+}
+
+bool EffectsBrowser::eventFilter(QObject *obj, QEvent *event)
+{
+    if (obj == m_list && event->type() == QEvent::KeyPress) {
+        auto *ke = static_cast<QKeyEvent *>(event);
+        if (ke->key() == Qt::Key_Return || ke->key() == Qt::Key_Enter) {
+            auto *item = m_list->currentItem();
+            if (item) {
+                onItemActivated(item);
+                return true;
+            }
+        }
+    }
+    return QWidget::eventFilter(obj, event);
 }
 
 void EffectsBrowser::onItemActivated(QListWidgetItem *item)

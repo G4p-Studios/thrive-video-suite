@@ -44,6 +44,9 @@ private slots:
     void onItemActivated(QListWidgetItem *item);
     void onCurrentChanged(QListWidgetItem *current, QListWidgetItem *previous);
 
+protected:
+    bool eventFilter(QObject *obj, QEvent *event) override;
+
 private:
     Announcer   *m_announcer = nullptr;
     MltEngine   *m_engine    = nullptr;
