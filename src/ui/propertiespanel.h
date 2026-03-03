@@ -15,12 +15,14 @@ QT_FORWARD_DECLARE_CLASS(QGroupBox)
 QT_FORWARD_DECLARE_CLASS(QVBoxLayout)
 QT_FORWARD_DECLARE_CLASS(QUndoStack)
 QT_FORWARD_DECLARE_CLASS(QCheckBox)
+QT_FORWARD_DECLARE_CLASS(QTimer)
 
 namespace Thrive {
 
 class Clip;
 class Track;
 class Effect;
+class Transition;
 class Announcer;
 
 /// Displays and edits the properties of the currently focused clip or
@@ -48,17 +50,25 @@ signals:
     /// Emitted when an in/out point change requires a tractor rebuild.
     void clipTrimmed();
 
+    /// Emitted when an effect is added, removed, reordered, or parameter
+    /// changed – tells MainWindow to rebuild the tractor.
+    void effectChanged();
+
 private slots:
     void onClipNameEdited();
     void onClipDescriptionEdited();
+    void commitDescription();
     void onInPointEdited();
     void onOutPointEdited();
 
 private:
     void buildClipForm();
     void buildEffectsSection();
+    void buildTransitionsSection();
     void populateEffects(const QVector<Effect *> &effects);
+    void populateTransitions(Clip *clip);
     void clearEffects();
+    void clearTransitions();
 
     Announcer  *m_announcer  = nullptr;
     QUndoStack *m_undoStack  = nullptr;
@@ -70,18 +80,28 @@ private:
     QLineEdit *m_clipName        = nullptr;
     QTextEdit *m_clipDescription = nullptr;
     QLabel    *m_clipSource      = nullptr;
-    QLineEdit *m_clipInPoint     = nullptr;   // editable timecode
-    QLineEdit *m_clipOutPoint    = nullptr;   // editable timecode
+    QLineEdit *m_clipInPoint     = nullptr;
+    QLineEdit *m_clipOutPoint    = nullptr;
     QLabel    *m_clipDuration    = nullptr;
 
     // Effects section
     QGroupBox   *m_effectsGroup  = nullptr;
     QVBoxLayout *m_effectsLayout = nullptr;
+
+    // Transitions section
+    QGroupBox   *m_transitionsGroup  = nullptr;
+    QVBoxLayout *m_transitionsLayout = nullptr;
+
     /// Widgets created dynamically for each effect – cleaned up on re-inspect
     QVector<QWidget *> m_effectWidgets;
+    QVector<QWidget *> m_transitionWidgets;
 
     Clip  *m_currentClip  = nullptr;
     Track *m_currentTrack = nullptr;
+
+    // Description debounce timer
+    QTimer *m_descDebounce = nullptr;
+    QString m_pendingDesc;
 };
 
 } // namespace Thrive

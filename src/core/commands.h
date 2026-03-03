@@ -303,6 +303,8 @@ public:
                                  QUndoCommand *parent = nullptr);
     void undo() override;
     void redo() override;
+    int  id()   const override;
+    bool mergeWith(const QUndoCommand *other) override;
 
 private:
     Effect  *m_effect;
@@ -363,6 +365,40 @@ private:
     Clip  *m_clip = nullptr;
     int    m_srcIndex;
     int    m_dstIndex;
+};
+
+// ---------------------------------------------------------------------------
+// RenameTrackCommand – undoable track name change
+// ---------------------------------------------------------------------------
+class RenameTrackCommand : public QUndoCommand
+{
+public:
+    RenameTrackCommand(Track *track, const QString &newName,
+                       QUndoCommand *parent = nullptr);
+    void undo() override;
+    void redo() override;
+
+private:
+    Track   *m_track;
+    QString  m_oldName;
+    QString  m_newName;
+};
+
+// ---------------------------------------------------------------------------
+// MoveEffectCommand – reorder effects on a clip
+// ---------------------------------------------------------------------------
+class MoveEffectCommand : public QUndoCommand
+{
+public:
+    MoveEffectCommand(Clip *clip, int fromIndex, int toIndex,
+                      QUndoCommand *parent = nullptr);
+    void undo() override;
+    void redo() override;
+
+private:
+    Clip *m_clip;
+    int   m_from;
+    int   m_to;
 };
 
 } // namespace Thrive

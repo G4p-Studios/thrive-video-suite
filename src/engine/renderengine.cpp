@@ -27,7 +27,9 @@ bool RenderEngine::startRender(Mlt::Producer *producer,
                                 const QString &outputPath,
                                 const QString &format,
                                 const QString &vcodec,
-                                const QString &acodec)
+                                const QString &acodec,
+                                int vBitrateKbps,
+                                int aBitrateKbps)
 {
     if (m_rendering || !m_engine || !m_engine->isInitialized() || !producer)
         return false;
@@ -51,6 +53,12 @@ bool RenderEngine::startRender(Mlt::Producer *producer,
         m_renderConsumer->set("vcodec", vcodec.toUtf8().constData());
     if (!acodec.isEmpty())
         m_renderConsumer->set("acodec", acodec.toUtf8().constData());
+    if (vBitrateKbps > 0)
+        m_renderConsumer->set("vb",
+            QStringLiteral("%1k").arg(vBitrateKbps).toUtf8().constData());
+    if (aBitrateKbps > 0)
+        m_renderConsumer->set("ab",
+            QStringLiteral("%1k").arg(aBitrateKbps).toUtf8().constData());
 
     // Sensible defaults
     m_renderConsumer->set("rescale", "bicubic");

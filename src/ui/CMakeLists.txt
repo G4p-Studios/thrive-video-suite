@@ -11,6 +11,8 @@ qt_add_library(thrive-ui STATIC
     preferencesdialog.h     preferencesdialog.cpp
     shortcuteditor.h        shortcuteditor.cpp
     pluginmanager.h         pluginmanager.cpp
+    exportdialog.h          exportdialog.cpp
+    exportprogressdialog.h  exportprogressdialog.cpp
 )
 
 # Pin to C++20 for Qt header compatibility

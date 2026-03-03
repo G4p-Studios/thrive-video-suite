@@ -5,6 +5,7 @@
 #include "../core/clip.h"
 #include "../core/track.h"
 #include "../core/effect.h"
+#include "../core/transition.h"
 #include "../core/timecode.h"
 #include "../core/commands.h"
 #include "../accessibility/announcer.h"
@@ -13,11 +14,14 @@
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QGroupBox>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPushButton>
 #include <QScrollArea>
 #include <QSpinBox>
 #include <QTextEdit>
+#include <QTimer>
 #include <QUndoStack>
 #include <QVBoxLayout>
 
@@ -51,9 +55,21 @@ PropertiesPanel::PropertiesPanel(Announcer *announcer,
     // ── Effects section ──────────────────────────────────────────────
     buildEffectsSection();
     mainLayout->addWidget(m_effectsGroup);
+
+    // ── Transitions section ──────────────────────────────────────────
+    buildTransitionsSection();
+    mainLayout->addWidget(m_transitionsGroup);
+
     mainLayout->addStretch();
 
     m_scrollArea->setWidget(m_formWidget);
+
+    // Description debounce timer (500ms)
+    m_descDebounce = new QTimer(this);
+    m_descDebounce->setSingleShot(true);
+    m_descDebounce->setInterval(500);
+    connect(m_descDebounce, &QTimer::timeout,
+            this, &PropertiesPanel::commitDescription);
 
     clear();
 }
@@ -107,6 +123,14 @@ void PropertiesPanel::buildEffectsSection()
     m_effectsGroup->setVisible(false);
 }
 
+void PropertiesPanel::buildTransitionsSection()
+{
+    m_transitionsGroup = new QGroupBox(tr("Transitions"), m_formWidget);
+    m_transitionsGroup->setAccessibleName(tr("Clip transitions"));
+    m_transitionsLayout = new QVBoxLayout(m_transitionsGroup);
+    m_transitionsGroup->setVisible(false);
+}
+
 // ── inspect ──────────────────────────────────────────────────────────
 
 void PropertiesPanel::inspectClip(Clip *clip)
@@ -142,6 +166,9 @@ void PropertiesPanel::inspectClip(Clip *clip)
     // Populate effects
     populateEffects(clip->effects());
 
+    // Populate transitions
+    populateTransitions(clip);
+
     m_announcer->announce(
         tr("Inspecting clip: %1").arg(clip->name()),
         Announcer::Priority::Low);
@@ -171,6 +198,7 @@ void PropertiesPanel::inspectTrack(Track *track)
     m_clipDuration->setText(tr("%n clip(s)", nullptr, track->clips().size()));
 
     clearEffects();
+    clearTransitions();
 
     m_announcer->announce(
         tr("Inspecting track: %1").arg(track->name()),
@@ -190,6 +218,7 @@ void PropertiesPanel::clear()
     m_clipOutPoint->setEnabled(false);
     m_clipDuration->clear();
     clearEffects();
+    clearTransitions();
     m_formWidget->setVisible(false);
 }
 
@@ -202,18 +231,28 @@ void PropertiesPanel::onClipNameEdited()
         if (newName != m_currentClip->name())
             m_undoStack->push(new RenameClipCommand(m_currentClip, newName));
     } else if (m_currentTrack) {
-        m_currentTrack->setName(m_clipName->text());
+        const QString newName = m_clipName->text();
+        if (newName != m_currentTrack->name())
+            m_undoStack->push(
+                new RenameTrackCommand(m_currentTrack, newName));
     }
 }
 
 void PropertiesPanel::onClipDescriptionEdited()
 {
-    if (m_currentClip) {
-        const QString newDesc = m_clipDescription->toPlainText();
-        if (newDesc != m_currentClip->description())
-            m_undoStack->push(
-                new ChangeClipDescriptionCommand(m_currentClip, newDesc));
-    }
+    if (!m_currentClip) return;
+
+    m_pendingDesc = m_clipDescription->toPlainText();
+    m_descDebounce->start(); // restart the 500ms timer
+}
+
+void PropertiesPanel::commitDescription()
+{
+    if (!m_currentClip) return;
+
+    if (m_pendingDesc != m_currentClip->description())
+        m_undoStack->push(
+            new ChangeClipDescriptionCommand(m_currentClip, m_pendingDesc));
 }
 
 void PropertiesPanel::onInPointEdited()
@@ -309,12 +348,61 @@ void PropertiesPanel::populateEffects(const QVector<Effect *> &effects)
 
     m_effectsGroup->setVisible(true);
 
-    for (Effect *effect : effects) {
+    for (int i = 0; i < effects.size(); ++i) {
+        Effect *effect = effects.at(i);
+
         // Per-effect container
         auto *card = new QGroupBox(effect->displayName(), m_effectsGroup);
         card->setAccessibleName(
             tr("Effect: %1").arg(effect->displayName()));
         auto *cardLayout = new QFormLayout(card);
+
+        // ── Action buttons (Remove / Move Up / Move Down) ────────
+        auto *btnRow = new QHBoxLayout;
+
+        auto *btnRemove = new QPushButton(tr("Remove"), card);
+        btnRemove->setAccessibleName(
+            tr("Remove effect %1").arg(effect->displayName()));
+        connect(btnRemove, &QPushButton::clicked,
+                this, [this, i]() {
+                    if (!m_currentClip) return;
+                    m_undoStack->push(
+                        new RemoveEffectCommand(m_currentClip, i));
+                    populateEffects(m_currentClip->effects());
+                    emit effectChanged();
+                });
+        btnRow->addWidget(btnRemove);
+
+        auto *btnUp = new QPushButton(tr("Up"), card);
+        btnUp->setAccessibleName(
+            tr("Move %1 up").arg(effect->displayName()));
+        btnUp->setEnabled(i > 0);
+        connect(btnUp, &QPushButton::clicked,
+                this, [this, i]() {
+                    if (!m_currentClip || i <= 0) return;
+                    m_undoStack->push(
+                        new MoveEffectCommand(m_currentClip, i, i - 1));
+                    populateEffects(m_currentClip->effects());
+                    emit effectChanged();
+                });
+        btnRow->addWidget(btnUp);
+
+        auto *btnDown = new QPushButton(tr("Down"), card);
+        btnDown->setAccessibleName(
+            tr("Move %1 down").arg(effect->displayName()));
+        btnDown->setEnabled(i < effects.size() - 1);
+        connect(btnDown, &QPushButton::clicked,
+                this, [this, i]() {
+                    if (!m_currentClip) return;
+                    if (i >= m_currentClip->effects().size() - 1) return;
+                    m_undoStack->push(
+                        new MoveEffectCommand(m_currentClip, i, i + 1));
+                    populateEffects(m_currentClip->effects());
+                    emit effectChanged();
+                });
+        btnRow->addWidget(btnDown);
+        btnRow->addStretch();
+        cardLayout->addRow(btnRow);
 
         // Enabled toggle
         auto *enabledCb = new QCheckBox(tr("Enabled"), card);
@@ -324,9 +412,11 @@ void PropertiesPanel::populateEffects(const QVector<Effect *> &effects)
         cardLayout->addRow(enabledCb);
         connect(enabledCb, &QCheckBox::toggled,
                 this, [this, effect](bool checked) {
-                    if (checked != effect->isEnabled())
+                    if (checked != effect->isEnabled()) {
                         m_undoStack->push(
                             new SetEffectEnabledCommand(effect, checked));
+                        emit effectChanged();
+                    }
                 });
 
         // Parameter widgets
@@ -352,6 +442,7 @@ void PropertiesPanel::populateEffects(const QVector<Effect *> &effects)
                             m_undoStack->push(
                                 new ChangeEffectParameterCommand(
                                     effect, paramId, v));
+                            emit effectChanged();
                         });
                 cardLayout->addRow(param.displayName + QStringLiteral(":"),
                                    spin);
@@ -373,6 +464,7 @@ void PropertiesPanel::populateEffects(const QVector<Effect *> &effects)
                             m_undoStack->push(
                                 new ChangeEffectParameterCommand(
                                     effect, paramId, v));
+                            emit effectChanged();
                         });
                 cardLayout->addRow(param.displayName + QStringLiteral(":"),
                                    spin);
@@ -388,6 +480,7 @@ void PropertiesPanel::populateEffects(const QVector<Effect *> &effects)
                             m_undoStack->push(
                                 new ChangeEffectParameterCommand(
                                     effect, paramId, v));
+                            emit effectChanged();
                         });
                 cardLayout->addRow(cb);
 
@@ -403,6 +496,7 @@ void PropertiesPanel::populateEffects(const QVector<Effect *> &effects)
                             m_undoStack->push(
                                 new ChangeEffectParameterCommand(
                                     effect, paramId, edit->text()));
+                            emit effectChanged();
                         });
                 cardLayout->addRow(param.displayName + QStringLiteral(":"),
                                    edit);
@@ -412,6 +506,77 @@ void PropertiesPanel::populateEffects(const QVector<Effect *> &effects)
         m_effectsLayout->addWidget(card);
         m_effectWidgets.append(card);
     }
+}
+
+// ── transitions ──────────────────────────────────────────────────────
+
+void PropertiesPanel::clearTransitions()
+{
+    for (auto *w : m_transitionWidgets)
+        delete w;
+    m_transitionWidgets.clear();
+    m_transitionsGroup->setVisible(false);
+}
+
+void PropertiesPanel::populateTransitions(Clip *clip)
+{
+    clearTransitions();
+
+    if (!clip) return;
+    if (!clip->inTransition() && !clip->outTransition()) return;
+
+    m_transitionsGroup->setVisible(true);
+
+    auto addTransitionCard = [&](Transition *trans, bool isIn) {
+        if (!trans) return;
+
+        const QString edgeLabel = isIn ? tr("In Transition")
+                                       : tr("Out Transition");
+        auto *card = new QGroupBox(
+            QStringLiteral("%1: %2").arg(edgeLabel, trans->displayName()),
+            m_transitionsGroup);
+        card->setAccessibleName(
+            tr("%1 %2").arg(edgeLabel, trans->displayName()));
+        auto *layout = new QFormLayout(card);
+
+        // Duration editor
+        auto *durSpin = new QDoubleSpinBox(card);
+        durSpin->setAccessibleName(tr("Transition duration seconds"));
+        durSpin->setMinimum(0.1);
+        durSpin->setMaximum(30.0);
+        durSpin->setSingleStep(0.1);
+        durSpin->setDecimals(1);
+        const double fps = clip->inPoint().fps() > 0 ? clip->inPoint().fps() : 25.0;
+        durSpin->setValue(trans->duration().frame() / fps);
+        layout->addRow(tr("Duration (s):"), durSpin);
+
+        connect(durSpin, &QDoubleSpinBox::valueChanged,
+                this, [trans, fps](double val) {
+                    int frames = static_cast<int>(val * fps);
+                    trans->setDuration(TimeCode(frames, fps));
+                });
+
+        // Remove button
+        auto *btnRemove = new QPushButton(tr("Remove"), card);
+        btnRemove->setAccessibleName(
+            tr("Remove %1").arg(edgeLabel));
+        using Edge = AddTransitionCommand::Edge;
+        Edge edge = isIn ? Edge::In : Edge::Out;
+        connect(btnRemove, &QPushButton::clicked,
+                this, [this, clip, edge]() {
+                    m_undoStack->push(
+                        new RemoveTransitionCommand(clip, edge));
+                    populateTransitions(clip);
+                    emit effectChanged();
+                });
+        layout->addRow(btnRemove);
+
+        m_transitionsLayout->addWidget(card);
+        m_transitionWidgets.append(card);
+    };
+
+    addTransitionCard(clip->inTransition(), true);
+    addTransitionCard(clip->outTransition(), false);
 }
 
 } // namespace Thrive

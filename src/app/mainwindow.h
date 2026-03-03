@@ -113,9 +113,12 @@ private:
     QAction *m_actAddTrack       = nullptr;
     QAction *m_actRemoveTrack    = nullptr;
     QAction *m_actAddMarker      = nullptr;
+    QAction *m_actRemoveMarker   = nullptr;
     QAction *m_actAddTransition  = nullptr;
     QAction *m_actMuteTrack      = nullptr;
     QAction *m_actLockTrack      = nullptr;
+    QAction *m_actMoveClipUp     = nullptr;
+    QAction *m_actMoveClipDown   = nullptr;
 
     // Transport actions (global shortcuts)
     QAction *m_actPlayPause      = nullptr;
@@ -123,6 +126,7 @@ private:
     QAction *m_actLForward       = nullptr;
     QAction *m_actFrameBack      = nullptr;
     QAction *m_actFrameForward   = nullptr;
+    QAction *m_actGoToTimecode   = nullptr;
 
     // Quick-access actions
     QAction *m_actFocusMedia     = nullptr;

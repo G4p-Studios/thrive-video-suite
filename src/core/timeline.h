@@ -35,6 +35,7 @@ public:
     // Markers
     [[nodiscard]] const QVector<Marker *> &markers() const { return m_markers; }
     void addMarker(Marker *marker);
+    void insertMarker(int index, Marker *marker);
     void removeMarker(int index);
 
     // Playhead position

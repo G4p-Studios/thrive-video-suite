@@ -62,6 +62,16 @@ void Timeline::addMarker(Marker *marker)
     emit markersChanged();
 }
 
+void Timeline::insertMarker(int index, Marker *marker)
+{
+    marker->setParent(this);
+    if (index >= 0 && index <= m_markers.size())
+        m_markers.insert(index, marker);
+    else
+        m_markers.append(marker);
+    emit markersChanged();
+}
+
 void Timeline::removeMarker(int index)
 {
     if (index >= 0 && index < m_markers.size()) {

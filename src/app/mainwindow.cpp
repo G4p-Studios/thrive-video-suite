@@ -30,6 +30,8 @@
 #include "../ui/effectsbrowser.h"
 #include "../ui/preferencesdialog.h"
 #include "../ui/shortcuteditor.h"
+#include "../ui/exportdialog.h"
+#include "../ui/exportprogressdialog.h"
 
 #include <mlt++/MltProducer.h>
 #include <mlt++/MltProfile.h>
@@ -42,6 +44,7 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QInputDialog>
+#include <QLineEdit>
 #include <QMessageBox>
 #include <QCloseEvent>
 #include <QSettings>
@@ -255,29 +258,6 @@ void MainWindow::saveProjectAs()
 
 void MainWindow::exportVideo()
 {
-    const QString path = QFileDialog::getSaveFileName(
-        this, tr("Export Video"), QString(),
-        tr("MP4 Video (*.mp4);;MKV Video (*.mkv);;All Files (*)"));
-    if (path.isEmpty()) return;
-
-    m_announcer->announce(tr("Export started…"), Announcer::Priority::High);
-    // Disconnect previous render connections to avoid accumulating duplicates
-    disconnect(m_render, &RenderEngine::renderProgress, this, nullptr);
-    disconnect(m_render, &RenderEngine::renderFinished, this, nullptr);
-    connect(m_render, &RenderEngine::renderProgress,
-            this, [this](int percent) {
-                m_announcer->announce(
-                    tr("Rendering: %1%").arg(percent),
-                    Announcer::Priority::Low);
-            });
-    connect(m_render, &RenderEngine::renderFinished,
-            this, [this](bool success) {
-                m_announcer->announce(
-                    success ? tr("Export complete!")
-                            : tr("Export failed."),
-                    Announcer::Priority::High);
-            });
-
     auto *tractor = m_tractorBuilder->tractor();
     if (!tractor) {
         m_announcer->announce(
@@ -286,13 +266,41 @@ void MainWindow::exportVideo()
         return;
     }
 
+    // Show export settings dialog
+    auto *dlg = new ExportDialog(this);
+    if (dlg->exec() != QDialog::Accepted || dlg->outputPath().isEmpty()) {
+        dlg->deleteLater();
+        return;
+    }
+
+    const QString path   = dlg->outputPath();
+    const QString format = dlg->format();
+    const QString vcodec = dlg->videoCodec();
+    const QString acodec = dlg->audioCodec();
+    const int vBitrate   = dlg->videoBitrate();
+    const int aBitrate   = dlg->audioBitrate();
+    dlg->deleteLater();
+
     // Pause playback before rendering
     m_playback->pause();
 
-    m_render->startRender(tractor, path,
-                          QStringLiteral("mp4"),
-                          QStringLiteral("libx264"),
-                          QStringLiteral("aac"));
+    // Disconnect previous render connections
+    disconnect(m_render, &RenderEngine::renderProgress, this, nullptr);
+    disconnect(m_render, &RenderEngine::renderFinished, this, nullptr);
+
+    m_announcer->announce(tr("Export started…"), Announcer::Priority::High);
+
+    if (!m_render->startRender(tractor, path, format, vcodec, acodec,
+                               vBitrate, aBitrate)) {
+        m_announcer->announce(tr("Export failed to start."),
+                              Announcer::Priority::High);
+        return;
+    }
+
+    // Show modal progress dialog
+    auto *progress = new ExportProgressDialog(m_render, m_announcer, this);
+    progress->exec();
+    progress->deleteLater();
 }
 
 void MainWindow::showPreferences()
@@ -395,6 +403,11 @@ void MainWindow::createActions()
                                   Announcer::Priority::Normal);
             return;
         }
+        if (trk->isLocked()) {
+            m_announcer->announce(tr("Track is locked."),
+                                  Announcer::Priority::Normal);
+            return;
+        }
         // Copy to clipboard before removing
         auto *src = trk->clipAt(idx);
         delete m_clipboardClip;
@@ -448,6 +461,11 @@ void MainWindow::createActions()
                                   Announcer::Priority::Normal);
             return;
         }
+        if (trk->isLocked()) {
+            m_announcer->announce(tr("Track is locked."),
+                                  Announcer::Priority::Normal);
+            return;
+        }
         // Create a new clip from the clipboard data
         auto *newClip = new Clip(m_clipboardClip->name(),
                                  m_clipboardClip->sourcePath(),
@@ -472,6 +490,11 @@ void MainWindow::createActions()
         int   idx = tl->currentClipIndex();
         if (!trk || idx < 0 || idx >= trk->clipCount()) {
             m_announcer->announce(tr("No clip selected."),
+                                  Announcer::Priority::Normal);
+            return;
+        }
+        if (trk->isLocked()) {
+            m_announcer->announce(tr("Track is locked."),
                                   Announcer::Priority::Normal);
             return;
         }
@@ -503,6 +526,11 @@ void MainWindow::createActions()
         int   idx = tl->currentClipIndex();
         if (!trk || idx < 0 || idx >= trk->clipCount()) {
             m_announcer->announce(tr("No clip selected to split."),
+                                  Announcer::Priority::Normal);
+            return;
+        }
+        if (trk->isLocked()) {
+            m_announcer->announce(tr("Track is locked."),
                                   Announcer::Priority::Normal);
             return;
         }
@@ -617,6 +645,107 @@ void MainWindow::createActions()
             Announcer::Priority::High);
     });
 
+    // ── Remove Marker at Playhead ────────────────────────────────
+    m_actRemoveMarker = new QAction(tr("Re&move Marker at Playhead"), this);
+    m_actRemoveMarker->setShortcut(
+        QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_M));
+    connect(m_actRemoveMarker, &QAction::triggered, this, [this]() {
+        auto *tl = m_project->timeline();
+        const TimeCode pos = tl->playheadPosition();
+        int found = -1;
+        for (int i = 0; i < tl->markers().size(); ++i) {
+            if (tl->markers().at(i)->position() == pos) {
+                found = i;
+                break;
+            }
+        }
+        if (found < 0) {
+            m_announcer->announce(tr("No marker at playhead."),
+                                  Announcer::Priority::Normal);
+            return;
+        }
+        const QString name = tl->markers().at(found)->name();
+        m_undoStack->push(new RemoveMarkerCommand(tl, found));
+        m_announcer->announce(
+            tr("Removed marker \"%1\".").arg(name),
+            Announcer::Priority::High);
+    });
+
+    // ── Move clip between tracks (Shift+Up / Shift+Down) ─────────
+    m_actMoveClipUp = new QAction(tr("Move Clip to Track A&bove"), this);
+    connect(m_actMoveClipUp, &QAction::triggered, this, [this]() {
+        auto *tl  = m_project->timeline();
+        int trkIdx = tl->currentTrackIndex();
+        auto *trk = tl->trackAt(trkIdx);
+        int clipIdx = tl->currentClipIndex();
+        if (!trk || clipIdx < 0 || clipIdx >= trk->clipCount()) {
+            m_announcer->announce(tr("No clip selected."),
+                                  Announcer::Priority::Normal);
+            return;
+        }
+        if (trk->isLocked()) {
+            m_announcer->announce(tr("Track is locked."),
+                                  Announcer::Priority::Normal);
+            return;
+        }
+        if (trkIdx <= 0) {
+            m_announcer->announce(tr("Already on the first track."),
+                                  Announcer::Priority::Normal);
+            return;
+        }
+        auto *dst = tl->trackAt(trkIdx - 1);
+        if (dst->isLocked()) {
+            m_announcer->announce(tr("Destination track is locked."),
+                                  Announcer::Priority::Normal);
+            return;
+        }
+        m_undoStack->push(new MoveClipBetweenTracksCommand(
+            trk, clipIdx, dst));
+        tl->setCurrentTrackIndex(trkIdx - 1);
+        m_modified = true;
+        m_timeline->refresh();
+        m_announcer->announce(
+            tr("Clip moved to %1.").arg(dst->name()),
+            Announcer::Priority::High);
+    });
+
+    m_actMoveClipDown = new QAction(tr("Move Clip to Track Be&low"), this);
+    connect(m_actMoveClipDown, &QAction::triggered, this, [this]() {
+        auto *tl  = m_project->timeline();
+        int trkIdx = tl->currentTrackIndex();
+        auto *trk = tl->trackAt(trkIdx);
+        int clipIdx = tl->currentClipIndex();
+        if (!trk || clipIdx < 0 || clipIdx >= trk->clipCount()) {
+            m_announcer->announce(tr("No clip selected."),
+                                  Announcer::Priority::Normal);
+            return;
+        }
+        if (trk->isLocked()) {
+            m_announcer->announce(tr("Track is locked."),
+                                  Announcer::Priority::Normal);
+            return;
+        }
+        if (trkIdx >= tl->trackCount() - 1) {
+            m_announcer->announce(tr("Already on the last track."),
+                                  Announcer::Priority::Normal);
+            return;
+        }
+        auto *dst = tl->trackAt(trkIdx + 1);
+        if (dst->isLocked()) {
+            m_announcer->announce(tr("Destination track is locked."),
+                                  Announcer::Priority::Normal);
+            return;
+        }
+        m_undoStack->push(new MoveClipBetweenTracksCommand(
+            trk, clipIdx, dst));
+        tl->setCurrentTrackIndex(trkIdx + 1);
+        m_modified = true;
+        m_timeline->refresh();
+        m_announcer->announce(
+            tr("Clip moved to %1.").arg(dst->name()),
+            Announcer::Priority::High);
+    });
+
     connect(m_actNew,   &QAction::triggered, this, &MainWindow::newProject);
     connect(m_actOpen,  &QAction::triggered, this, &MainWindow::openProject);
     connect(m_actSave,  &QAction::triggered, this, &MainWindow::saveProject);
@@ -671,6 +800,31 @@ void MainWindow::createActions()
     connect(actKStop, &QAction::triggered,
             m_playback, &PlaybackController::stopTransport);
     addAction(actKStop);
+
+    // Go to timecode (Ctrl+G)
+    m_actGoToTimecode = new QAction(tr("&Go to Timecode…"), this);
+    m_actGoToTimecode->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_G));
+    connect(m_actGoToTimecode, &QAction::triggered, this, [this]() {
+        bool ok = false;
+        const QString input = QInputDialog::getText(
+            this, tr("Go to Timecode"),
+            tr("Enter timecode (HH:MM:SS:FF):"),
+            QLineEdit::Normal, QString(), &ok);
+        if (!ok || input.isEmpty()) return;
+
+        const TimeCode tc = TimeCode::fromString(input, m_project->fps());
+        if (tc.frame() < 0) {
+            m_announcer->announce(tr("Invalid timecode."),
+                                  Announcer::Priority::Normal);
+            return;
+        }
+        m_project->timeline()->setPlayheadPosition(tc);
+        m_playback->seek(static_cast<int>(tc.frame()));
+        m_announcer->announce(
+            tr("Moved to %1.").arg(tc.toSpokenString()),
+            Announcer::Priority::High);
+    });
+    addAction(m_actGoToTimecode);
 
     // ── Mute / Lock track toggles ─────────────────────────────────
     m_actMuteTrack = new QAction(tr("Toggle Track &Mute"), this);
@@ -787,6 +941,7 @@ void MainWindow::createMenus()
     timelineMenu->addAction(m_actRemoveTrack);
     timelineMenu->addSeparator();
     timelineMenu->addAction(m_actAddMarker);
+    timelineMenu->addAction(m_actRemoveMarker);
     timelineMenu->addSeparator();
     timelineMenu->addAction(m_actAddTransition);
     timelineMenu->addSeparator();
@@ -795,6 +950,9 @@ void MainWindow::createMenus()
     timelineMenu->addSeparator();
     timelineMenu->addAction(m_actMoveTrackUp);
     timelineMenu->addAction(m_actMoveTrackDown);
+    timelineMenu->addSeparator();
+    timelineMenu->addAction(m_actMoveClipUp);
+    timelineMenu->addAction(m_actMoveClipDown);
 
     auto *transportMenu = menuBar()->addMenu(tr("T&ransport"));
     transportMenu->addAction(m_actPlayPause);
@@ -803,6 +961,8 @@ void MainWindow::createMenus()
     transportMenu->addSeparator();
     transportMenu->addAction(m_actFrameBack);
     transportMenu->addAction(m_actFrameForward);
+    transportMenu->addSeparator();
+    transportMenu->addAction(m_actGoToTimecode);
 
     auto *viewMenu = menuBar()->addMenu(tr("&View"));
     viewMenu->addAction(m_actFocusMedia);
@@ -842,6 +1002,10 @@ void MainWindow::createDockWidgets()
 
     // Rebuild tractor when a clip is trimmed from the properties panel
     connect(m_properties, &PropertiesPanel::clipTrimmed,
+            this, &MainWindow::rebuildTractor);
+
+    // Rebuild tractor when effects are changed from the properties panel
+    connect(m_properties, &PropertiesPanel::effectChanged,
             this, &MainWindow::rebuildTractor);
 
     // Effects browser (right, tabbed with properties)
@@ -935,6 +1099,11 @@ void MainWindow::createDockWidgets()
                         Announcer::Priority::High);
                     return;
                 }
+                if (trk->isLocked()) {
+                    m_announcer->announce(tr("Track is locked."),
+                                          Announcer::Priority::Normal);
+                    return;
+                }
 
                 auto *clip   = trk->clipAt(idx);
                 auto *effect = new Effect(serviceId, serviceId, QString());
@@ -1016,6 +1185,16 @@ void MainWindow::registerShortcuts()
                       QKeySequence(QStringLiteral("Alt+Up")));
     sm.registerAction(QStringLiteral("timeline.moveTrackDown"), m_actMoveTrackDown,
                       QKeySequence(QStringLiteral("Alt+Down")));
+
+    // Phase 7 additions
+    sm.registerAction(QStringLiteral("timeline.removeMarker"), m_actRemoveMarker,
+                      QKeySequence(QStringLiteral("Ctrl+Shift+M")));
+    sm.registerAction(QStringLiteral("timeline.moveClipUp"), m_actMoveClipUp,
+                      QKeySequence(QStringLiteral("Shift+Up")));
+    sm.registerAction(QStringLiteral("timeline.moveClipDown"), m_actMoveClipDown,
+                      QKeySequence(QStringLiteral("Shift+Down")));
+    sm.registerAction(QStringLiteral("transport.goToTimecode"), m_actGoToTimecode,
+                      QKeySequence(QStringLiteral("Ctrl+G")));
 }
 
 void MainWindow::rebuildTractor()

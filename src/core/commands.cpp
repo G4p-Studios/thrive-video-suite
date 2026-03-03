@@ -180,6 +180,9 @@ void SplitClipCommand::redo()
         m_newClip->addEffect(copy);
     }
 
+    // Place the new clip at the split position on the timeline
+    m_newClip->setTimelinePosition(m_splitPoint);
+
     // Move the original's outTransition to the new clip (it is now the
     // clip that borders the next clip)
     if (original->outTransition()) {
@@ -368,9 +371,7 @@ RemoveMarkerCommand::RemoveMarkerCommand(Timeline *timeline, int markerIndex,
 void RemoveMarkerCommand::undo()
 {
     auto *marker = new Marker(m_name, m_position, m_comment);
-    m_timeline->addMarker(marker);
-    // Re-insert at original position by moving it if needed
-    // (addMarker appends, but this preserves order on undo)
+    m_timeline->insertMarker(m_index, marker);
 }
 
 void RemoveMarkerCommand::redo()
@@ -501,6 +502,23 @@ void ChangeEffectParameterCommand::redo()
     m_effect->setParameterValue(m_paramId, m_newValue);
 }
 
+int ChangeEffectParameterCommand::id() const
+{
+    // Unique command type ID for merge support
+    return 1001;
+}
+
+bool ChangeEffectParameterCommand::mergeWith(const QUndoCommand *other)
+{
+    auto *cmd = dynamic_cast<const ChangeEffectParameterCommand *>(other);
+    if (!cmd) return false;
+    if (cmd->m_effect != m_effect || cmd->m_paramId != m_paramId)
+        return false;
+    // Keep our original old value, adopt the newer new value
+    m_newValue = cmd->m_newValue;
+    return true;
+}
+
 // ===========================================================================
 // SetEffectEnabledCommand
 // ===========================================================================
@@ -564,5 +582,37 @@ void MoveClipBetweenTracksCommand::redo()
     m_srcTrack->removeClip(m_srcIndex);
     m_dstTrack->insertClip(m_dstIndex, m_clip);
 }
+
+// ===========================================================================
+// RenameTrackCommand
+// ===========================================================================
+RenameTrackCommand::RenameTrackCommand(Track *track, const QString &newName,
+                                       QUndoCommand *parent)
+    : QUndoCommand(parent)
+    , m_track(track)
+    , m_oldName(track->name())
+    , m_newName(newName)
+{
+    setText(QObject::tr("Rename track \"%1\"").arg(newName));
+}
+
+void RenameTrackCommand::undo()  { m_track->setName(m_oldName); }
+void RenameTrackCommand::redo()  { m_track->setName(m_newName); }
+
+// ===========================================================================
+// MoveEffectCommand
+// ===========================================================================
+MoveEffectCommand::MoveEffectCommand(Clip *clip, int fromIndex, int toIndex,
+                                     QUndoCommand *parent)
+    : QUndoCommand(parent)
+    , m_clip(clip)
+    , m_from(fromIndex)
+    , m_to(toIndex)
+{
+    setText(QObject::tr("Reorder effect"));
+}
+
+void MoveEffectCommand::undo()  { m_clip->moveEffect(m_to, m_from); }
+void MoveEffectCommand::redo()  { m_clip->moveEffect(m_from, m_to); }
 
 } // namespace Thrive

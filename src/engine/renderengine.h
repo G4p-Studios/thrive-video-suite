@@ -35,7 +35,9 @@ public:
                      const QString &outputPath,
                      const QString &format = {},
                      const QString &vcodec = {},
-                     const QString &acodec = {});
+                     const QString &acodec = {},
+                     int vBitrateKbps = 0,
+                     int aBitrateKbps = 0);
 
     /// Cancel an in-progress render.
     void cancelRender();
