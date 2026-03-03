@@ -36,15 +36,41 @@ void PlaybackController::setProducer(Mlt::Producer *producer)
     m_producer = producer;
 }
 
+void PlaybackController::setWindowId(quintptr id)
+{
+    m_windowId = id;
+}
+
 bool PlaybackController::open()
 {
     if (!m_engine || !m_engine->isInitialized() || !m_producer)
         return false;
 
     auto *previewProfile = m_engine->previewProfile();
-    m_consumer = std::make_unique<Mlt::Consumer>(*previewProfile, "sdl2");
 
-    if (!m_consumer->is_valid())
+    if (m_windowId != 0) {
+        // Preferred path: use the SDL2 consumer with an embedded window
+        // so video is rendered inside the application's preview widget.
+        m_consumer = std::make_unique<Mlt::Consumer>(*previewProfile, "sdl2");
+        if (m_consumer->is_valid()) {
+            m_consumer->set("window_id",
+                           static_cast<int64_t>(m_windowId));
+        } else {
+            m_consumer.reset();
+        }
+    }
+
+    // Fallback chain if SDL2 with window_id failed or no window was set
+    if (!m_consumer) {
+        static const char *fallbacks[] = { "sdl2_audio", "sdl2", "rtaudio" };
+        for (const char *name : fallbacks) {
+            m_consumer = std::make_unique<Mlt::Consumer>(*previewProfile, name);
+            if (m_consumer->is_valid())
+                break;
+            m_consumer.reset();
+        }
+    }
+    if (!m_consumer)
         return false;
 
     m_consumer->set("scrub_audio", m_scrubAudio ? 1 : 0);

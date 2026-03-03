@@ -32,6 +32,10 @@ public:
     /// Attach the top-level MLT producer (Tractor) that represents the timeline.
     void setProducer(Mlt::Producer *producer);
 
+    /// Set the native window ID for the SDL2 consumer to render into.
+    /// Must be called before open().  Pass 0 for audio-only playback.
+    void setWindowId(quintptr id);
+
     /// Open and start the consumer. Call after setProducer().
     bool open();
 
@@ -84,6 +88,7 @@ private:
     MltEngine *m_engine = nullptr;
     std::unique_ptr<Mlt::Consumer> m_consumer;
     Mlt::Producer *m_producer = nullptr; // not owned – the Tractor lives in the engine
+    quintptr m_windowId = 0; // native window handle for SDL2 video output
 
     State  m_state = State::Stopped;
     double m_speed = 0.0;

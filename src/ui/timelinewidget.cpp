@@ -13,6 +13,7 @@
 
 #include <QKeyEvent>
 #include <QAccessible>
+#include <QAccessibleTableInterface>
 
 namespace Thrive {
 
@@ -54,6 +55,30 @@ TimelineWidget::TimelineWidget(Timeline *timeline,
 void TimelineWidget::refresh()
 {
     updateStatusLabel();
+
+    // Notify screen readers that the table model changed so NVDA
+    // picks up newly added clips / tracks.
+    if (auto *iface = QAccessible::queryAccessibleInterface(this)) {
+        QAccessibleTableModelChangeEvent ev(this,
+            QAccessibleTableModelChangeEvent::ModelReset);
+        QAccessible::updateAccessibility(&ev);
+    }
+}
+
+void TimelineWidget::connectTrackSignals()
+{
+    // Disconnect any previous per-track connections
+    for (const auto &conn : m_trackConnections)
+        disconnect(conn);
+    m_trackConnections.clear();
+
+    // Connect every track's clipsChanged signal so the widget
+    // refreshes when clips are added, removed, or reordered.
+    if (!m_timeline) return;
+    for (auto *trk : m_timeline->tracks()) {
+        m_trackConnections.append(
+            connect(trk, &Track::clipsChanged, this, &TimelineWidget::refresh));
+    }
 }
 
 void TimelineWidget::setTimeline(Timeline *timeline)
@@ -69,7 +94,13 @@ void TimelineWidget::setTimeline(Timeline *timeline)
             this, [this](int, int) { refresh(); });
     connect(m_timeline, &Timeline::playheadChanged,
             this, [this](const TimeCode &) { refresh(); });
+    connect(m_timeline, &Timeline::tracksChanged,
+            this, [this]() {
+                connectTrackSignals();
+                refresh();
+            });
 
+    connectTrackSignals();
     m_accessibleTimeline->setTimeline(m_timeline);
     updateStatusLabel();
 }
@@ -224,14 +255,21 @@ void TimelineWidget::updateStatusLabel()
     int clipIdx  = m_timeline->currentClipIndex();
     const auto &clips = trk->clips();
 
-    QString text = tr("Track %1 (%2)")
+    QString text = tr("Track %1 of %2 (%3, %n clip(s))", nullptr, clips.size())
                        .arg(trackIdx + 1)
+                       .arg(m_timeline->trackCount())
                        .arg(trk->type() == Track::Type::Video
                                 ? tr("Video") : tr("Audio"));
 
     if (clipIdx >= 0 && clipIdx < clips.size()) {
         const Clip *c = clips.at(clipIdx);
-        text += QStringLiteral(" — ") + c->name();
+        text += QStringLiteral(" — ") + c->name()
+              + QStringLiteral(" [") + c->timelinePosition().toString()
+              + QStringLiteral(" – ") + (c->timelinePosition() + c->duration()).toString()
+              + QStringLiteral("]");
+    } else if (!clips.isEmpty()) {
+        // Clips exist but index is out of range — show first
+        text += QStringLiteral(" — ") + clips.first()->name();
     } else {
         text += QStringLiteral(" — ") + tr("(empty)");
     }

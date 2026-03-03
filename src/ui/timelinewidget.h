@@ -6,6 +6,7 @@
 #include <QWidget>
 #include <QLabel>
 #include <QVBoxLayout>
+#include <QMetaObject>
 
 QT_FORWARD_DECLARE_CLASS(QAccessibleInterface)
 
@@ -53,12 +54,14 @@ protected:
 
 private:
     void updateStatusLabel();
+    void connectTrackSignals();
 
     Timeline           *m_timeline           = nullptr;
     Announcer          *m_announcer          = nullptr;
     AccessibleTimeline *m_accessibleTimeline = nullptr;
     QLabel             *m_statusLabel        = nullptr;
     QVBoxLayout        *m_layout             = nullptr;
+    QList<QMetaObject::Connection> m_trackConnections;
 };
 
 } // namespace Thrive

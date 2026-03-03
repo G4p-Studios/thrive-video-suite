@@ -12,7 +12,7 @@
 namespace Thrive {
 
 // =====================================================================
-// Factory – called from main.cpp via QAccessible::installFactory
+// Factory – registered by registerAccessibleTimelineFactory()
 // =====================================================================
 
 static QAccessibleInterface *timelineAccessibleFactory(const QString &cn,
@@ -25,10 +25,10 @@ static QAccessibleInterface *timelineAccessibleFactory(const QString &cn,
     return nullptr;
 }
 
-static bool s_registered = [] {
+void registerAccessibleTimelineFactory()
+{
     QAccessible::installFactory(timelineAccessibleFactory);
-    return true;
-}();
+}
 
 // =====================================================================
 // AccessibleTimelineView (table)

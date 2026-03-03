@@ -28,6 +28,7 @@
 #include "../ui/mediabrowser.h"
 #include "../ui/propertiespanel.h"
 #include "../ui/effectsbrowser.h"
+#include "../ui/videopreviewwidget.h"
 #include "../ui/preferencesdialog.h"
 #include "../ui/shortcuteditor.h"
 #include "../ui/exportdialog.h"
@@ -57,6 +58,7 @@
 #include <QAbstractButton>
 #include <QComboBox>
 #include <QAbstractSpinBox>
+#include <QSplitter>
 
 namespace Thrive {
 
@@ -103,6 +105,10 @@ MainWindow::MainWindow(Project *project,
             this, [this](Mlt::Tractor *tractor) {
                 m_playback->close();
                 m_playback->setProducer(tractor);
+                // Pass the preview widget's native window handle so the
+                // SDL2 consumer renders video into our embedded widget.
+                if (m_preview)
+                    m_playback->setWindowId(m_preview->nativeWindowId());
                 m_playback->open();
             });
 
@@ -1164,10 +1170,22 @@ void MainWindow::createMenus()
 
 void MainWindow::createDockWidgets()
 {
-    // Central widget: Timeline
+    // Central widget: a splitter holding the preview and timeline
+    auto *centralSplitter = new QSplitter(Qt::Vertical, this);
+
+    // Video preview (top of centre)
+    m_preview = new VideoPreviewWidget(this);
+    centralSplitter->addWidget(m_preview);
+
+    // Timeline (bottom of centre)
     m_timeline = new TimelineWidget(
         m_project->timeline(), m_announcer, m_cues, this);
-    setCentralWidget(m_timeline);
+    centralSplitter->addWidget(m_timeline);
+
+    // Give the preview roughly 2/3 of the space, timeline 1/3
+    centralSplitter->setStretchFactor(0, 2);
+    centralSplitter->setStretchFactor(1, 1);
+    setCentralWidget(centralSplitter);
 
     // Transport bar (bottom)
     m_transport = new TransportBar(
@@ -1228,6 +1246,13 @@ void MainWindow::createDockWidgets()
     // ── Media import → timeline ──────────────────────────────────────
     connect(m_media, &MediaBrowser::fileActivated,
             this, [this](const QString &filePath) {
+                if (filePath.isEmpty()) {
+                    m_announcer->announce(
+                        tr("No file path available."),
+                        Announcer::Priority::High);
+                    return;
+                }
+
                 auto *tl = m_project->timeline();
 
                 // Auto-create default video + audio tracks if the timeline
@@ -1243,18 +1268,26 @@ void MainWindow::createDockWidgets()
                             new Track(tr("Audio 1"), Track::Type::Audio)));
                 }
 
-                // Probe the file with MLT to get its duration
-                auto *profile = m_engine->compositionProfile();
-                Mlt::Producer probe(*profile, filePath.toUtf8().constData());
-                if (!probe.is_valid()) {
-                    m_announcer->announce(
-                        tr("Cannot open file: %1").arg(QFileInfo(filePath).fileName()),
-                        Announcer::Priority::High);
-                    return;
+                // Probe the file with MLT to get its duration.
+                // If probing fails we still add the clip with a fallback
+                // duration so the timeline is never silently empty.
+                const double fps = m_project->fps();
+                int length = 0;
+
+                auto *profile = m_engine ? m_engine->compositionProfile()
+                                         : nullptr;
+                if (profile) {
+                    Mlt::Producer probe(*profile,
+                                        filePath.toUtf8().constData());
+                    if (probe.is_valid()) {
+                        length = probe.get_length();
+                    }
                 }
 
-                const double fps = m_project->fps();
-                const int length = probe.get_length();
+                // Fallback: 5 seconds if probe returned nothing usable
+                if (length <= 0)
+                    length = static_cast<int>(fps * 5);
+
                 TimeCode inPt(0, fps);
                 TimeCode outPt(length > 0 ? length - 1 : 0, fps);
 
@@ -1271,7 +1304,13 @@ void MainWindow::createDockWidgets()
                     // Fallback to track 0
                     trk = tl->trackAt(0);
                 }
-                if (!trk) return;
+                if (!trk) {
+                    m_announcer->announce(
+                        tr("No track available. Add a track first."),
+                        Announcer::Priority::High);
+                    delete clip;
+                    return;
+                }
 
                 m_undoStack->push(new AddClipCommand(trk, clip));
                 m_modified = true;

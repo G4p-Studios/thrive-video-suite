@@ -9,6 +9,7 @@
 #include "../accessibility/screenreader.h"
 #include "../accessibility/announcer.h"
 #include "../accessibility/audiocuemanager.h"
+#include "../ui/accessibletimelineview.h"
 
 #include <QApplication>
 #include <QTranslator>
@@ -36,6 +37,11 @@ int main(int argc, char *argv[])
 
     // ── Screen reader ───────────────────────────────────────────────
     Thrive::ScreenReader::instance().initialize();
+
+    // ── Accessible timeline table factory ────────────────────────────
+    // Must be called before any TimelineWidget is created so that
+    // QAccessible knows how to wrap it as a table.
+    Thrive::registerAccessibleTimelineFactory();
 
     // ── MLT Framework ───────────────────────────────────────────────
     Thrive::MltEngine engine;

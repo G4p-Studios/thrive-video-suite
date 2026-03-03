@@ -23,6 +23,7 @@ class TransportBar;
 class MediaBrowser;
 class PropertiesPanel;
 class EffectsBrowser;
+class VideoPreviewWidget;
 class Clip;
 
 /// The main application window.  Assembles all panels as QDockWidgets
@@ -82,11 +83,12 @@ private:
     ProjectSerializer  *m_serializer = nullptr;
 
     // UI panels
-    TimelineWidget   *m_timeline   = nullptr;
-    TransportBar     *m_transport  = nullptr;
-    MediaBrowser     *m_media      = nullptr;
-    PropertiesPanel  *m_properties = nullptr;
-    EffectsBrowser   *m_effects    = nullptr;
+    TimelineWidget      *m_timeline   = nullptr;
+    TransportBar        *m_transport  = nullptr;
+    MediaBrowser        *m_media      = nullptr;
+    PropertiesPanel     *m_properties = nullptr;
+    EffectsBrowser      *m_effects    = nullptr;
+    VideoPreviewWidget  *m_preview    = nullptr;
 
     // File state
     QString m_currentFilePath;

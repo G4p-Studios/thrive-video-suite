@@ -13,6 +13,7 @@ qt_add_library(thrive-ui STATIC
     pluginmanager.h         pluginmanager.cpp
     exportdialog.h          exportdialog.cpp
     exportprogressdialog.h  exportprogressdialog.cpp
+    videopreviewwidget.h    videopreviewwidget.cpp
 )
 
 # Pin to C++20 for Qt header compatibility

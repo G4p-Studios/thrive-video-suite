@@ -12,6 +12,10 @@ namespace Thrive {
 class TimelineWidget;
 class Timeline;
 
+/// Call once at startup (from main.cpp) to ensure the accessible
+/// factory is linked and registered with QAccessible.
+void registerAccessibleTimelineFactory();
+
 /// Exposes the TimelineWidget as an accessible table so that screen
 /// readers can navigate rows (tracks) and columns (clips) with their
 /// native table commands (e.g. Ctrl+Alt+Arrows in NVDA).
