@@ -59,6 +59,8 @@ private:
     void registerShortcuts();
     void checkFirstRun();
     void checkPostRestartPlugins();
+    void checkAutoSaveRecovery();
+    void removeAutoSaveFile();
     void rebuildTractor();
     void reconnectTimeline();
     void updateWindowTitle();
@@ -132,8 +134,13 @@ private:
     QAction *m_actGoToTimecode   = nullptr;
 
     // Quick-access actions
-    QAction *m_actFocusMedia     = nullptr;
-    QAction *m_actFocusEffects   = nullptr;
+    QAction *m_actFocusMedia       = nullptr;
+    QAction *m_actFocusEffects     = nullptr;
+    QAction *m_actFocusProperties  = nullptr;
+
+    // Clip nudge
+    QAction *m_actNudgeClipLeft    = nullptr;
+    QAction *m_actNudgeClipRight   = nullptr;
 
     // Track reorder actions
     QAction *m_actMoveTrackUp    = nullptr;

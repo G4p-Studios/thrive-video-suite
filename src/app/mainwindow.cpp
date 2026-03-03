@@ -140,6 +140,9 @@ MainWindow::MainWindow(Project *project,
     // First-run wizard
     checkFirstRun();
 
+    // Check for auto-save recovery
+    checkAutoSaveRecovery();
+
     // Restore window geometry and dock layout from previous session.
     // Deferred to a zero-timer so the restore runs after the initial
     // show() layout pass – avoids crashes from incompatible state blobs.
@@ -206,6 +209,9 @@ void MainWindow::closeEvent(QCloseEvent *event)
         }
     }
 
+    // Remove auto-save file on clean exit
+    removeAutoSaveFile();
+
     // Persist window geometry and dock layout
     QSettings s;
     s.setValue(QStringLiteral("mainwindow/geometry"), saveGeometry());
@@ -224,6 +230,9 @@ void MainWindow::newProject()
     m_currentFilePath.clear();
     m_modified = false;
     m_undoStack->clear();
+
+    // Remove stale auto-save
+    removeAutoSaveFile();
 
     // Project::reset() replaces the Timeline object, so reconnect everything
     reconnectTimeline();
@@ -284,6 +293,10 @@ void MainWindow::saveProject()
     m_project->setModified(false);
     updateWindowTitle();
     addRecentProject(m_currentFilePath);
+
+    // Remove auto-save file after successful explicit save
+    removeAutoSaveFile();
+
     m_announcer->announce(tr("Project saved."), Announcer::Priority::Normal);
 }
 
@@ -452,21 +465,40 @@ void MainWindow::createActions()
             m_cues->play(AudioCueManager::Cue::Error);
             return;
         }
-        // Copy to clipboard before removing
+        // Deep-copy to clipboard before removing
         auto *src = trk->clipAt(idx);
+        const QString clipName = src->name();
         delete m_clipboardClip;
         m_clipboardClip = new Clip(src->name(), src->sourcePath(),
                                    src->inPoint(), src->outPoint(), this);
         m_clipboardClip->setTimelinePosition(src->timelinePosition());
-        for (auto *fx : src->effects())
-            m_clipboardClip->addEffect(
-                new Effect(fx->serviceId(), fx->displayName(),
-                           fx->description(), m_clipboardClip));
+        m_clipboardClip->setDescription(src->description());
+        for (auto *fx : src->effects()) {
+            auto *fxCopy = new Effect(fx->serviceId(), fx->displayName(),
+                                      fx->description(), m_clipboardClip);
+            fxCopy->setEnabled(fx->isEnabled());
+            for (const auto &p : fx->parameters()) {
+                fxCopy->addParameter(p);
+            }
+            m_clipboardClip->addEffect(fxCopy);
+        }
+        if (auto *t = src->outTransition()) {
+            m_clipboardClip->setOutTransition(
+                new Transition(t->serviceId(), t->displayName(),
+                               t->description(), t->duration(),
+                               m_clipboardClip));
+        }
+        if (auto *t = src->inTransition()) {
+            m_clipboardClip->setInTransition(
+                new Transition(t->serviceId(), t->displayName(),
+                               t->description(), t->duration(),
+                               m_clipboardClip));
+        }
 
         m_undoStack->push(new RemoveClipCommand(trk, idx));
         m_modified = true;
         m_announcer->announce(
-            tr("Cut: %1").arg(src->name()), Announcer::Priority::Normal);
+            tr("Cut: %1").arg(clipName), Announcer::Priority::Normal);
     });
 
     connect(m_actCopy, &QAction::triggered, this, [this]() {
@@ -484,10 +516,28 @@ void MainWindow::createActions()
         m_clipboardClip = new Clip(src->name(), src->sourcePath(),
                                    src->inPoint(), src->outPoint(), this);
         m_clipboardClip->setTimelinePosition(src->timelinePosition());
-        for (auto *fx : src->effects())
-            m_clipboardClip->addEffect(
-                new Effect(fx->serviceId(), fx->displayName(),
-                           fx->description(), m_clipboardClip));
+        m_clipboardClip->setDescription(src->description());
+        for (auto *fx : src->effects()) {
+            auto *fxCopy = new Effect(fx->serviceId(), fx->displayName(),
+                                      fx->description(), m_clipboardClip);
+            fxCopy->setEnabled(fx->isEnabled());
+            for (const auto &p : fx->parameters()) {
+                fxCopy->addParameter(p);
+            }
+            m_clipboardClip->addEffect(fxCopy);
+        }
+        if (auto *t = src->outTransition()) {
+            m_clipboardClip->setOutTransition(
+                new Transition(t->serviceId(), t->displayName(),
+                               t->description(), t->duration(),
+                               m_clipboardClip));
+        }
+        if (auto *t = src->inTransition()) {
+            m_clipboardClip->setInTransition(
+                new Transition(t->serviceId(), t->displayName(),
+                               t->description(), t->duration(),
+                               m_clipboardClip));
+        }
 
         m_announcer->announce(
             tr("Copied: %1").arg(src->name()), Announcer::Priority::Normal);
@@ -514,16 +564,32 @@ void MainWindow::createActions()
             m_cues->play(AudioCueManager::Cue::Error);
             return;
         }
-        // Create a new clip from the clipboard data
+        // Create a new clip from the clipboard data (deep copy)
         auto *newClip = new Clip(m_clipboardClip->name(),
                                  m_clipboardClip->sourcePath(),
                                  m_clipboardClip->inPoint(),
                                  m_clipboardClip->outPoint());
         newClip->setTimelinePosition(tl->playheadPosition());
-        for (auto *fx : m_clipboardClip->effects())
-            newClip->addEffect(
-                new Effect(fx->serviceId(), fx->displayName(),
-                           fx->description(), newClip));
+        newClip->setDescription(m_clipboardClip->description());
+        for (auto *fx : m_clipboardClip->effects()) {
+            auto *fxCopy = new Effect(fx->serviceId(), fx->displayName(),
+                                      fx->description(), newClip);
+            fxCopy->setEnabled(fx->isEnabled());
+            for (const auto &p : fx->parameters()) {
+                fxCopy->addParameter(p);
+            }
+            newClip->addEffect(fxCopy);
+        }
+        if (auto *t = m_clipboardClip->outTransition()) {
+            newClip->setOutTransition(
+                new Transition(t->serviceId(), t->displayName(),
+                               t->description(), t->duration(), newClip));
+        }
+        if (auto *t = m_clipboardClip->inTransition()) {
+            newClip->setInTransition(
+                new Transition(t->serviceId(), t->displayName(),
+                               t->description(), t->duration(), newClip));
+        }
 
         m_undoStack->push(new AddClipCommand(trk, newClip));
         m_modified = true;
@@ -930,6 +996,13 @@ void MainWindow::createActions()
                               Announcer::Priority::Normal);
     });
 
+    m_actFocusProperties = new QAction(tr("Focus &Properties Panel"), this);
+    connect(m_actFocusProperties, &QAction::triggered, this, [this]() {
+        m_properties->setFocus();
+        m_announcer->announce(tr("Properties panel"),
+                              Announcer::Priority::Normal);
+    });
+
     // ── Move track up / down ──────────────────────────────────────────
     m_actMoveTrackUp = new QAction(tr("Move Track &Up"), this);
     connect(m_actMoveTrackUp, &QAction::triggered, this, [this]() {
@@ -999,6 +1072,68 @@ void MainWindow::createActions()
         m_modified = true;
         rebuildTractor();
     });
+
+    // ── Nudge clip position (frame-accurate repositioning) ────────
+    m_actNudgeClipLeft = new QAction(tr("Nudge Clip &Left (−1 frame)"), this);
+    connect(m_actNudgeClipLeft, &QAction::triggered, this, [this]() {
+        auto *tl  = m_project->timeline();
+        auto *trk = tl->trackAt(tl->currentTrackIndex());
+        int   idx = tl->currentClipIndex();
+        if (!trk || idx < 0 || idx >= trk->clipCount()) {
+            m_announcer->announce(tr("No clip selected."),
+                                  Announcer::Priority::Normal);
+            m_cues->play(AudioCueManager::Cue::Error);
+            return;
+        }
+        if (trk->isLocked()) {
+            m_announcer->announce(tr("Track is locked."),
+                                  Announcer::Priority::Normal);
+            m_cues->play(AudioCueManager::Cue::Error);
+            return;
+        }
+        auto *clip = trk->clipAt(idx);
+        const int64_t frame = clip->timelinePosition().frame();
+        if (frame <= 0) {
+            m_announcer->announce(tr("Clip is already at the start."),
+                                  Announcer::Priority::Normal);
+            m_cues->play(AudioCueManager::Cue::Error);
+            return;
+        }
+        clip->setTimelinePosition(
+            TimeCode(frame - 1, m_project->fps()));
+        m_modified = true;
+        rebuildTractor();
+        m_announcer->announce(
+            tr("Clip at %1.").arg(clip->timelinePosition().toSpokenString()),
+            Announcer::Priority::Normal);
+    });
+
+    m_actNudgeClipRight = new QAction(tr("Nudge Clip &Right (+1 frame)"), this);
+    connect(m_actNudgeClipRight, &QAction::triggered, this, [this]() {
+        auto *tl  = m_project->timeline();
+        auto *trk = tl->trackAt(tl->currentTrackIndex());
+        int   idx = tl->currentClipIndex();
+        if (!trk || idx < 0 || idx >= trk->clipCount()) {
+            m_announcer->announce(tr("No clip selected."),
+                                  Announcer::Priority::Normal);
+            m_cues->play(AudioCueManager::Cue::Error);
+            return;
+        }
+        if (trk->isLocked()) {
+            m_announcer->announce(tr("Track is locked."),
+                                  Announcer::Priority::Normal);
+            m_cues->play(AudioCueManager::Cue::Error);
+            return;
+        }
+        auto *clip = trk->clipAt(idx);
+        clip->setTimelinePosition(
+            TimeCode(clip->timelinePosition().frame() + 1, m_project->fps()));
+        m_modified = true;
+        rebuildTractor();
+        m_announcer->announce(
+            tr("Clip at %1.").arg(clip->timelinePosition().toSpokenString()),
+            Announcer::Priority::Normal);
+    });
 }
 
 void MainWindow::createMenus()
@@ -1050,6 +1185,9 @@ void MainWindow::createMenus()
     timelineMenu->addSeparator();
     timelineMenu->addAction(m_actMoveClipUp);
     timelineMenu->addAction(m_actMoveClipDown);
+    timelineMenu->addSeparator();
+    timelineMenu->addAction(m_actNudgeClipLeft);
+    timelineMenu->addAction(m_actNudgeClipRight);
 
     auto *transportMenu = menuBar()->addMenu(tr("T&ransport"));
     transportMenu->addAction(m_actPlayPause);
@@ -1064,6 +1202,7 @@ void MainWindow::createMenus()
     auto *viewMenu = menuBar()->addMenu(tr("&View"));
     viewMenu->addAction(m_actFocusMedia);
     viewMenu->addAction(m_actFocusEffects);
+    viewMenu->addAction(m_actFocusProperties);
 
     auto *helpMenu = menuBar()->addMenu(tr("&Help"));
     helpMenu->addAction(m_actWizard);
@@ -1284,6 +1423,8 @@ void MainWindow::registerShortcuts()
                       QKeySequence(QStringLiteral("Ctrl+I")));
     sm.registerAction(QStringLiteral("view.focusEffects"), m_actFocusEffects,
                       QKeySequence(QStringLiteral("Ctrl+E")));
+    sm.registerAction(QStringLiteral("view.focusProperties"), m_actFocusProperties,
+                      QKeySequence(QStringLiteral("Ctrl+P")));
 
     // Track reorder
     sm.registerAction(QStringLiteral("timeline.moveTrackUp"), m_actMoveTrackUp,
@@ -1302,6 +1443,12 @@ void MainWindow::registerShortcuts()
                       QKeySequence(QStringLiteral("Ctrl+G")));
     sm.registerAction(QStringLiteral("timeline.soloTrack"), m_actSoloTrack,
                       QKeySequence(QStringLiteral("Ctrl+Shift+S")));
+
+    // Nudge clip position
+    sm.registerAction(QStringLiteral("timeline.nudgeClipLeft"), m_actNudgeClipLeft,
+                      QKeySequence(QStringLiteral("Ctrl+Left")));
+    sm.registerAction(QStringLiteral("timeline.nudgeClipRight"), m_actNudgeClipRight,
+                      QKeySequence(QStringLiteral("Ctrl+Right")));
 }
 
 void MainWindow::rebuildTractor()
@@ -1448,6 +1595,61 @@ void MainWindow::performAutoSave()
     } else {
         m_announcer->announce(
             tr("Auto-save failed."), Announcer::Priority::Low);
+    }
+}
+
+void MainWindow::removeAutoSaveFile()
+{
+    // Remove project-specific auto-save
+    if (!m_currentFilePath.isEmpty()) {
+        const QString autoPath =
+            m_currentFilePath + QStringLiteral(".autosave");
+        QFile::remove(autoPath);
+    }
+
+    // Also remove the fallback generic auto-save
+    const QString dir = QStandardPaths::writableLocation(
+        QStandardPaths::AppDataLocation);
+    QFile::remove(dir + QStringLiteral("/autosave.tvs"));
+}
+
+void MainWindow::checkAutoSaveRecovery()
+{
+    // Check for a generic (untitled project) auto-save
+    const QString appDir = QStandardPaths::writableLocation(
+        QStandardPaths::AppDataLocation);
+    const QString genericAutoSave =
+        appDir + QStringLiteral("/autosave.tvs");
+
+    if (QFileInfo::exists(genericAutoSave)) {
+        auto answer = QMessageBox::question(
+            this, tr("Recover Auto-Save?"),
+            tr("An auto-saved project was found from a previous session.\n"
+               "Would you like to recover it?"),
+            QMessageBox::Yes | QMessageBox::No);
+
+        if (answer == QMessageBox::Yes) {
+            m_playback->close();
+            if (m_serializer->load(m_project, genericAutoSave)) {
+                m_currentFilePath.clear(); // not a real saved file
+                m_modified = true;
+                m_undoStack->clear();
+                reconnectTimeline();
+                rebuildTractor();
+                m_timeline->refresh();
+                updateWindowTitle();
+                m_announcer->announce(
+                    tr("Auto-saved project recovered."),
+                    Announcer::Priority::High);
+            } else {
+                m_announcer->announce(
+                    tr("Failed to recover auto-save."),
+                    Announcer::Priority::High);
+            }
+        }
+
+        // Remove auto-save regardless of choice
+        QFile::remove(genericAutoSave);
     }
 }
 

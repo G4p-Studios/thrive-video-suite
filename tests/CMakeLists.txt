@@ -35,5 +35,8 @@ thrive_add_test(test_project)
 # ── command / undo tests ─────────────────────────────────────────────
 thrive_add_test(test_commands)
 
+# ── serializer round-trip tests ──────────────────────────────────────
+thrive_add_test(test_serializer QuaZip::QuaZip)
+
 # ── accessibility tests ──────────────────────────────────────────────
 thrive_add_test(test_announcer thrive-accessibility)

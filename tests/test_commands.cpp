@@ -432,6 +432,132 @@ private slots:
         QCOMPARE(clip->effects().at(2)->serviceId(), QStringLiteral("c"));
     }
 
+    // ── Deep-copy fidelity (clipboard operations) ───────────────────
+
+    void deepCopyPreservesEffectParameters()
+    {
+        // Simulate what cut/copy does: create a clip with effects+params,
+        // deep-copy it, verify the copy has all metadata.
+        auto *src = new Clip(QStringLiteral("Source"), QStringLiteral("/vid.mp4"),
+                             TimeCode(10, 25.0), TimeCode(100, 25.0));
+        src->setDescription(QStringLiteral("Important clip"));
+        src->setTimelinePosition(TimeCode(50, 25.0));
+
+        auto *fx = new Effect(QStringLiteral("blur"),
+                              QStringLiteral("Gaussian Blur"),
+                              QStringLiteral("Blur effect"));
+        fx->setEnabled(false);
+        EffectParameter p;
+        p.id = QStringLiteral("radius");
+        p.displayName = QStringLiteral("Radius");
+        p.type = QStringLiteral("float");
+        p.defaultValue = 5.0;
+        p.currentValue = 12.5;
+        p.minimum = 0.0;
+        p.maximum = 100.0;
+        fx->addParameter(p);
+        src->addEffect(fx);
+
+        // Add transitions
+        auto *outT = new Transition(QStringLiteral("luma"),
+                                    QStringLiteral("Dissolve"),
+                                    QStringLiteral("Cross dissolve"),
+                                    TimeCode(25, 25.0));
+        src->setOutTransition(outT);
+
+        // Perform deep copy (same as clipboard code)
+        auto *copy = new Clip(src->name(), src->sourcePath(),
+                              src->inPoint(), src->outPoint());
+        copy->setDescription(src->description());
+        copy->setTimelinePosition(src->timelinePosition());
+        for (auto *sfx : src->effects()) {
+            auto *fxCopy = new Effect(sfx->serviceId(), sfx->displayName(),
+                                      sfx->description(), copy);
+            fxCopy->setEnabled(sfx->isEnabled());
+            for (const auto &param : sfx->parameters())
+                fxCopy->addParameter(param);
+            copy->addEffect(fxCopy);
+        }
+        if (auto *t = src->outTransition())
+            copy->setOutTransition(
+                new Transition(t->serviceId(), t->displayName(),
+                               t->description(), t->duration(), copy));
+        if (auto *t = src->inTransition())
+            copy->setInTransition(
+                new Transition(t->serviceId(), t->displayName(),
+                               t->description(), t->duration(), copy));
+
+        // Verify deep copy
+        QCOMPARE(copy->name(), QStringLiteral("Source"));
+        QCOMPARE(copy->sourcePath(), QStringLiteral("/vid.mp4"));
+        QCOMPARE(copy->description(), QStringLiteral("Important clip"));
+        QCOMPARE(copy->inPoint().frame(), 10);
+        QCOMPARE(copy->outPoint().frame(), 100);
+        QCOMPARE(copy->timelinePosition().frame(), 50);
+
+        // Effects
+        QCOMPARE(copy->effects().size(), 1);
+        auto *cfx = copy->effects().at(0);
+        QCOMPARE(cfx->serviceId(), QStringLiteral("blur"));
+        QCOMPARE(cfx->isEnabled(), false);
+        QCOMPARE(cfx->parameters().size(), 1);
+        QCOMPARE(cfx->parameters().at(0).id, QStringLiteral("radius"));
+        QCOMPARE(cfx->parameters().at(0).currentValue.toDouble(), 12.5);
+
+        // Out transition
+        QVERIFY(copy->outTransition() != nullptr);
+        QCOMPARE(copy->outTransition()->serviceId(), QStringLiteral("luma"));
+        QCOMPARE(copy->outTransition()->duration().frame(), 25);
+
+        // In transition should be null (src didn't have one)
+        QVERIFY(copy->inTransition() == nullptr);
+
+        // Verify independence: changing source doesn't affect copy
+        src->setDescription(QStringLiteral("Changed"));
+        QCOMPARE(copy->description(), QStringLiteral("Important clip"));
+
+        delete src;
+        delete copy;
+    }
+
+    void deepCopyPreservesMultipleEffects()
+    {
+        auto *src = new Clip(QStringLiteral("Multi"), {},
+                             TimeCode(0, 25.0), TimeCode(50, 25.0));
+
+        auto *fx1 = new Effect(QStringLiteral("brightness"),
+                               QStringLiteral("Brightness"), {});
+        auto *fx2 = new Effect(QStringLiteral("contrast"),
+                               QStringLiteral("Contrast"), {});
+        auto *fx3 = new Effect(QStringLiteral("saturation"),
+                               QStringLiteral("Saturation"), {});
+        fx2->setEnabled(false);
+        src->addEffect(fx1);
+        src->addEffect(fx2);
+        src->addEffect(fx3);
+
+        // Deep copy
+        auto *copy = new Clip(src->name(), src->sourcePath(),
+                              src->inPoint(), src->outPoint());
+        for (auto *sfx : src->effects()) {
+            auto *fxCopy = new Effect(sfx->serviceId(), sfx->displayName(),
+                                      sfx->description(), copy);
+            fxCopy->setEnabled(sfx->isEnabled());
+            copy->addEffect(fxCopy);
+        }
+
+        QCOMPARE(copy->effects().size(), 3);
+        QCOMPARE(copy->effects().at(0)->serviceId(), QStringLiteral("brightness"));
+        QCOMPARE(copy->effects().at(0)->isEnabled(), true);
+        QCOMPARE(copy->effects().at(1)->serviceId(), QStringLiteral("contrast"));
+        QCOMPARE(copy->effects().at(1)->isEnabled(), false);
+        QCOMPARE(copy->effects().at(2)->serviceId(), QStringLiteral("saturation"));
+        QCOMPARE(copy->effects().at(2)->isEnabled(), true);
+
+        delete src;
+        delete copy;
+    }
+
 private:
     QUndoStack *m_stack    = nullptr;
     Timeline   *m_timeline = nullptr;

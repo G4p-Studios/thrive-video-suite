@@ -148,6 +148,27 @@ QByteArray ProjectSerializer::buildMetadataJson(const Project *project) const
         tObj[QStringLiteral("muted")]  = track->isMuted();
         tObj[QStringLiteral("locked")] = track->isLocked();
 
+        // Track-level effects
+        QJsonArray trackEffectsArr;
+        for (const auto *tfx : track->trackEffects()) {
+            QJsonObject tfxObj;
+            tfxObj[QStringLiteral("serviceId")]   = tfx->serviceId();
+            tfxObj[QStringLiteral("displayName")] = tfx->displayName();
+            tfxObj[QStringLiteral("description")] = tfx->description();
+            tfxObj[QStringLiteral("enabled")]     = tfx->isEnabled();
+
+            QJsonArray tfxParamsArr;
+            for (const auto &p : tfx->parameters()) {
+                QJsonObject pObj;
+                pObj[QStringLiteral("id")]    = p.id;
+                pObj[QStringLiteral("value")] = p.currentValue.toString();
+                tfxParamsArr.append(pObj);
+            }
+            tfxObj[QStringLiteral("parameters")] = tfxParamsArr;
+            trackEffectsArr.append(tfxObj);
+        }
+        tObj[QStringLiteral("trackEffects")] = trackEffectsArr;
+
         // Clip metadata (descriptions, user notes)
         QJsonArray clipsArr;
         for (const auto *clip : track->clips()) {
@@ -236,7 +257,19 @@ bool ProjectSerializer::applyMetadataJson(Project *project,
     project->setPreviewScale(root[QStringLiteral("previewScale")].toInt(640));
 
     const double fps = project->fps();
+
+    // Clear existing timeline data to avoid duplicating tracks on re-load
     auto *timeline = project->timeline();
+    while (timeline->trackCount() > 0) {
+        auto *t = timeline->trackAt(timeline->trackCount() - 1);
+        timeline->removeTrack(timeline->trackCount() - 1);
+        delete t;
+    }
+    while (!timeline->markers().isEmpty()) {
+        auto *m = timeline->markers().last();
+        timeline->removeMarker(timeline->markers().size() - 1);
+        delete m;
+    }
 
     // Rebuild tracks from metadata
     // (The MLT XML will rebuild the engine graph; metadata restores names & descriptions)
@@ -249,6 +282,33 @@ bool ProjectSerializer::applyMetadataJson(Project *project,
         auto *track = new Track(tObj[QStringLiteral("name")].toString(), type);
         track->setMuted(tObj[QStringLiteral("muted")].toBool());
         track->setLocked(tObj[QStringLiteral("locked")].toBool());
+
+        // Track-level effects
+        const auto trackEffectsArr = tObj[QStringLiteral("trackEffects")].toArray();
+        for (const auto &tfxVal : trackEffectsArr) {
+            const auto tfxObj = tfxVal.toObject();
+            auto *tfx = new Effect(
+                tfxObj[QStringLiteral("serviceId")].toString(),
+                tfxObj[QStringLiteral("displayName")].toString(),
+                tfxObj[QStringLiteral("description")].toString());
+            tfx->setEnabled(tfxObj[QStringLiteral("enabled")].toBool(true));
+
+            const auto tfxParamsArr = tfxObj[QStringLiteral("parameters")].toArray();
+            for (const auto &pVal : tfxParamsArr) {
+                const auto pObj = pVal.toObject();
+                const QString paramId = pObj[QStringLiteral("id")].toString();
+                const QVariant paramVal = pObj[QStringLiteral("value")].toVariant();
+                if (tfx->parameterValue(paramId).isValid()) {
+                    tfx->setParameterValue(paramId, paramVal);
+                } else {
+                    EffectParameter ep;
+                    ep.id = paramId;
+                    ep.currentValue = paramVal;
+                    tfx->addParameter(ep);
+                }
+            }
+            track->addTrackEffect(tfx);
+        }
 
         const auto clipsArr = tObj[QStringLiteral("clips")].toArray();
         for (const auto &cVal : clipsArr) {
@@ -274,8 +334,18 @@ bool ProjectSerializer::applyMetadataJson(Project *project,
                 const auto paramsArr = eObj[QStringLiteral("parameters")].toArray();
                 for (const auto &pVal : paramsArr) {
                     const auto pObj = pVal.toObject();
-                    effect->setParameterValue(pObj[QStringLiteral("id")].toString(),
-                                              pObj[QStringLiteral("value")]);
+                    const QString paramId = pObj[QStringLiteral("id")].toString();
+                    const QVariant paramVal = pObj[QStringLiteral("value")].toVariant();
+                    // If the parameter already exists (e.g. from MLT metadata),
+                    // update its value; otherwise create a minimal entry.
+                    if (effect->parameterValue(paramId).isValid()) {
+                        effect->setParameterValue(paramId, paramVal);
+                    } else {
+                        EffectParameter ep;
+                        ep.id = paramId;
+                        ep.currentValue = paramVal;
+                        effect->addParameter(ep);
+                    }
                 }
                 clip->addEffect(effect);
             }

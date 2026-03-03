@@ -197,7 +197,8 @@ void PropertiesPanel::inspectTrack(Track *track)
     m_clipOutPoint->setEnabled(false);
     m_clipDuration->setText(tr("%n clip(s)", nullptr, track->clips().size()));
 
-    clearEffects();
+    // Show track-level effects (read-only view – no reordering/removal yet)
+    populateEffects(track->trackEffects());
     clearTransitions();
 
     m_announcer->announce(
