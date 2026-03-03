@@ -166,12 +166,19 @@ set "MLT_DIR=%DEPS%\mlt"
 set "MLT_LIB=%MLT_DIR%\lib\libmlt-7.lib"
 set "MLT_STAMP=%MLT_DIR%\.msvc_ok"
 
-REM Check both the library AND the MSVC-build stamp file.
-REM If the stamp is missing, the MLT++ MSVC rebuild failed on a previous
-REM run and the import library has wrong (MinGW/GCC) symbol names.
+REM Check the library, the MSVC-build stamp, AND the MinGW runtime DLLs.
+REM If any are missing we need to (re-)run setup.
 set "NEED_MLT=0"
 if not exist "%MLT_LIB%" set "NEED_MLT=1"
 if not exist "%MLT_STAMP%" set "NEED_MLT=1"
+if not exist "%MLT_DIR%\bin\libdl.dll" set "NEED_MLT=1"
+if not exist "%MLT_DIR%\bin\libwinpthread-1.dll" set "NEED_MLT=1"
+if not exist "%MLT_DIR%\bin\libgcc_s_seh-1.dll" set "NEED_MLT=1"
+
+REM If runtime DLLs are missing, delete the stamp so setup re-runs fully
+if "!NEED_MLT!"=="1" (
+    if exist "%MLT_STAMP%" del "%MLT_STAMP%" >nul 2>&1
+)
 
 if "!NEED_MLT!"=="1" (
     echo       MLT not found or MSVC build incomplete — running setup...
