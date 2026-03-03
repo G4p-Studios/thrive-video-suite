@@ -260,16 +260,20 @@ $oldEAP = $ErrorActionPreference; $ErrorActionPreference = "Continue"
 $ErrorActionPreference = $oldEAP
 Write-Host "  MLT dependencies installed." -ForegroundColor Green
 
+# Define vcpkg installed directory early (needed by the MLT++ MSVC build step)
+$vcpkgInstalled = Join-Path (Join-Path $VcpkgDir "installed") "x64-windows"
+
 # =====================================================================
 #  5.  MLT Framework 7 - prebuilt from Shotcut
 # =====================================================================
 Write-Host ""
 Write-Host '-- Step 5/6: MLT Framework 7 (prebuilt) --' -ForegroundColor Yellow
 
-$mltPkgCfg = Join-Path (Join-Path (Join-Path $MltInstDir "lib") "pkgconfig") "mlt-framework-7.pc"
+$mltPkgCfg    = Join-Path (Join-Path (Join-Path $MltInstDir "lib") "pkgconfig") "mlt-framework-7.pc"
+$mltMsvcStamp = Join-Path $MltInstDir ".msvc_ok"
 
-if (Test-Path $mltPkgCfg) {
-    Write-Host "  MLT 7 already installed. OK" -ForegroundColor Green
+if ((Test-Path $mltPkgCfg) -and (Test-Path $mltMsvcStamp)) {
+    Write-Host "  MLT 7 already installed (MSVC-compatible). OK" -ForegroundColor Green
 } else {
     # -----------------------------------------------------------------
     # Download prebuilt MLT from the Shotcut portable release.
@@ -542,9 +546,18 @@ set CXXFLAGS=/nologo /EHsc /O2 /MD /std:c++17 /utf-8 /DMLTPP_EXPORTS /DWIN32 /D_
             Copy-Item $mltppDll $mltBinDir2 -Force
             Copy-Item $mltppLib $mltLibDir -Force
             Write-Host "  MLT++ built and installed (MSVC-compatible)." -ForegroundColor Green
+            # Create stamp file so build.bat knows the MSVC build succeeded
+            Set-Content -Path $mltMsvcStamp -Value "MLT++ rebuilt with MSVC on $(Get-Date -Format 'yyyy-MM-dd HH:mm')" -Encoding ASCII
         } else {
-            Write-Host "  WARNING: MLT++ MSVC build failed." -ForegroundColor Yellow
-            Write-Host "  The project may have linker errors for Mlt:: C++ symbols." -ForegroundColor Yellow
+            Write-Host "" -ForegroundColor Red
+            Write-Host "  ERROR: MLT++ MSVC build failed." -ForegroundColor Red
+            Write-Host "  Without this the project will have ~80 linker errors." -ForegroundColor Red
+            Write-Host "" -ForegroundColor Red
+            Write-Host "  Possible fixes:" -ForegroundColor Yellow
+            Write-Host "    1. Make sure VS has 'Desktop development with C++' workload" -ForegroundColor White
+            Write-Host "    2. Delete $MltInstDir and re-run: build setup" -ForegroundColor White
+            Write-Host "" -ForegroundColor Red
+            exit 1
         }
 
         if (Test-Path $mltPkgCfg) {

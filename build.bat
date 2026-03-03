@@ -164,9 +164,17 @@ echo [4/6] Checking MLT Framework 7...
 
 set "MLT_DIR=%DEPS%\mlt"
 set "MLT_LIB=%MLT_DIR%\lib\libmlt-7.lib"
+set "MLT_STAMP=%MLT_DIR%\.msvc_ok"
 
-if not exist "%MLT_LIB%" (
-    echo       MLT not found — running full setup...
+REM Check both the library AND the MSVC-build stamp file.
+REM If the stamp is missing, the MLT++ MSVC rebuild failed on a previous
+REM run and the import library has wrong (MinGW/GCC) symbol names.
+set "NEED_MLT=0"
+if not exist "%MLT_LIB%" set "NEED_MLT=1"
+if not exist "%MLT_STAMP%" set "NEED_MLT=1"
+
+if "!NEED_MLT!"=="1" (
+    echo       MLT not found or MSVC build incomplete — running setup...
     echo.
     echo       This downloads Shotcut portable ^(~193 MB^), extracts the
     echo       prebuilt MLT libraries, and rebuilds MLT++ with MSVC.
@@ -178,10 +186,11 @@ if not exist "%MLT_LIB%" (
         echo ERROR: Dependency setup failed.  See errors above.
         exit /b 1
     )
-    if not exist "%MLT_LIB%" (
+    if not exist "%MLT_STAMP%" (
         echo.
-        echo ERROR: MLT library still missing after setup.
-        echo   Try: build clean ^& build setup
+        echo ERROR: MLT++ MSVC build did not complete.
+        echo   The project will have ~80 linker errors without this.
+        echo   Try: delete C:\dev\thrive-deps\mlt and run "build setup"
         exit /b 1
     )
 ) else (
