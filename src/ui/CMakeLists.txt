@@ -3,6 +3,8 @@
 # ---------------------------------------------------------------------------
 qt_add_library(thrive-ui STATIC
     timelinewidget.h        timelinewidget.cpp
+    timelinecanvas.h        timelinecanvas.cpp
+    thumbnailprovider.h     thumbnailprovider.cpp
     accessibletimelineview.h accessibletimelineview.cpp
     transportbar.h          transportbar.cpp
     mediabrowser.h          mediabrowser.cpp

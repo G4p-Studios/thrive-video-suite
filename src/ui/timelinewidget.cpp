@@ -2,10 +2,13 @@
 // Thrive Video Suite – Timeline widget implementation
 
 #include "timelinewidget.h"
+#include "timelinecanvas.h"
+#include "thumbnailprovider.h"
 #include "accessibletimelineview.h"
 #include "../accessibility/accessibletimeline.h"
 #include "../accessibility/announcer.h"
 #include "../accessibility/audiocuemanager.h"
+#include "../engine/mltengine.h"
 #include "../core/timeline.h"
 #include "../core/track.h"
 #include "../core/clip.h"
@@ -13,19 +16,24 @@
 #include "../core/timecode.h"
 
 #include <QKeyEvent>
+#include <QResizeEvent>
 #include <QAccessible>
 #include <QAccessibleTableInterface>
 #include <QAccessibleEvent>
+
+#include <algorithm>
 
 namespace Thrive {
 
 TimelineWidget::TimelineWidget(Timeline *timeline,
                                Announcer *announcer,
                                AudioCueManager *cues,
+                               MltEngine *engine,
                                QWidget *parent)
     : QWidget(parent)
     , m_timeline(timeline)
     , m_announcer(announcer)
+    , m_engine(engine)
     , m_layout(new QVBoxLayout(this))
     , m_statusLabel(new QLabel(this))
 {
@@ -38,7 +46,24 @@ TimelineWidget::TimelineWidget(Timeline *timeline,
 
     m_statusLabel->setWordWrap(true);
     m_layout->addWidget(m_statusLabel);
-    m_layout->addStretch();
+
+    // Thumbnail provider (uses MLT to extract video frames)
+    m_thumbs = new ThumbnailProvider(m_engine, this);
+
+    // Visual canvas with track lanes, clip rectangles, and thumbnail strips
+    m_canvas = new TimelineCanvas(m_timeline, m_thumbs, this);
+    m_layout->addWidget(m_canvas, 1); // stretch factor 1
+
+    // Horizontal scrollbar
+    m_hScrollBar = new QScrollBar(Qt::Horizontal, this);
+    m_layout->addWidget(m_hScrollBar);
+    connect(m_hScrollBar, &QScrollBar::valueChanged,
+            m_canvas, &TimelineCanvas::setScrollX);
+    connect(m_canvas, &TimelineCanvas::scrollXChanged,
+            m_hScrollBar, &QScrollBar::setValue);
+
+    m_layout->setContentsMargins(0, 0, 0, 0);
+    m_layout->setSpacing(0);
 
     // Bridge: model → screen reader
     m_accessibleTimeline = new AccessibleTimeline(
@@ -58,11 +83,16 @@ TimelineWidget::TimelineWidget(Timeline *timeline,
 
     connectTrackSignals();
     updateStatusLabel();
+    updateScrollBar();
 }
 
 void TimelineWidget::refresh()
 {
     updateStatusLabel();
+    updateScrollBar();
+
+    if (m_canvas)
+        m_canvas->refresh();
 
     // Notify screen readers that the table model changed so NVDA
     // picks up newly added clips / tracks.
@@ -120,7 +150,10 @@ void TimelineWidget::setTimeline(Timeline *timeline)
 
     connectTrackSignals();
     m_accessibleTimeline->setTimeline(m_timeline);
+    if (m_canvas)
+        m_canvas->setTimeline(m_timeline);
     updateStatusLabel();
+    updateScrollBar();
 }
 
 // ── keyboard navigation ─────────────────────────────────────────────
@@ -298,6 +331,21 @@ void TimelineWidget::updateStatusLabel()
     }
 
     m_statusLabel->setText(text);
+}
+
+void TimelineWidget::updateScrollBar()
+{
+    if (!m_canvas || !m_hScrollBar) return;
+    const int total = m_canvas->totalWidth();
+    const int visible = m_canvas->width();
+    m_hScrollBar->setRange(0, std::max(0, total - visible));
+    m_hScrollBar->setPageStep(visible);
+}
+
+void TimelineWidget::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    updateScrollBar();
 }
 
 } // namespace Thrive

@@ -1175,7 +1175,7 @@ void MainWindow::createDockWidgets()
 
     // Timeline (bottom of centre)
     m_timeline = new TimelineWidget(
-        m_project->timeline(), m_announcer, m_cues, this);
+        m_project->timeline(), m_announcer, m_cues, m_engine, this);
     centralSplitter->addWidget(m_timeline);
 
     // Give the preview roughly 2/3 of the space, timeline 1/3
@@ -1191,6 +1191,7 @@ void MainWindow::createDockWidgets()
     m_transport = new TransportBar(
         m_playback, m_project->timeline(), m_announcer, this);
     auto *transportDock = new QDockWidget(tr("Transport"), this);
+    transportDock->setObjectName(QStringLiteral("TransportDock"));
     transportDock->setWidget(m_transport);
     transportDock->setFeatures(QDockWidget::DockWidgetMovable);
     transportDock->setAccessibleDescription(
@@ -1200,6 +1201,7 @@ void MainWindow::createDockWidgets()
     // Media browser (left)
     m_media = new MediaBrowser(m_announcer, m_engine, this);
     auto *mediaDock = new QDockWidget(tr("Media"), this);
+    mediaDock->setObjectName(QStringLiteral("MediaDock"));
     mediaDock->setWidget(m_media);
     mediaDock->setAccessibleDescription(
         tr("Media browser. Browse and import media files into your project."));
@@ -1208,6 +1210,7 @@ void MainWindow::createDockWidgets()
     // Properties panel (right)
     m_properties = new PropertiesPanel(m_announcer, m_undoStack, this);
     auto *propDock = new QDockWidget(tr("Properties"), this);
+    propDock->setObjectName(QStringLiteral("PropertiesDock"));
     propDock->setWidget(m_properties);
     propDock->setAccessibleDescription(
         tr("Properties panel. Ctrl+P to focus. Shows details for the selected clip or track."));
@@ -1224,6 +1227,7 @@ void MainWindow::createDockWidgets()
     // Effects browser (right, tabbed with properties)
     m_effects = new EffectsBrowser(m_catalog, m_announcer, this);
     auto *effectsDock = new QDockWidget(tr("Effects"), this);
+    effectsDock->setObjectName(QStringLiteral("EffectsDock"));
     effectsDock->setWidget(m_effects);
     effectsDock->setAccessibleDescription(
         tr("Effects browser. Browse and apply audio and video effects."));

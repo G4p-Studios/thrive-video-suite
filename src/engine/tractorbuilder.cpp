@@ -23,6 +23,7 @@
 
 #include <QTemporaryFile>
 #include <QFile>
+#include <QDebug>
 
 #include <algorithm>
 
@@ -42,6 +43,8 @@ TractorBuilder::~TractorBuilder() = default;
 
 bool TractorBuilder::rebuild(Timeline *timeline)
 {
+    qDebug() << "TractorBuilder::rebuild called, tracks:" 
+             << (timeline ? timeline->trackCount() : -1);
     if (!m_engine || !m_engine->isInitialized() || !timeline)
         return false;
 
@@ -271,11 +274,28 @@ std::unique_ptr<Mlt::Producer> TractorBuilder::buildProducer(Clip *clip)
     auto *profile = m_engine->compositionProfile();
     const QByteArray path = clip->sourcePath().toUtf8();
 
+    qDebug() << "TractorBuilder: creating producer for" << path;
+
     auto producer = std::make_unique<Mlt::Producer>(
         *profile, path.constData());
 
-    if (!producer->is_valid())
+    // If the bare path didn't work, try with explicit "avformat:" prefix
+    if (!producer->is_valid()) {
+        qWarning() << "TractorBuilder: bare path failed, trying avformat: prefix";
+        const QByteArray avfPath = "avformat:" + path;
+        producer = std::make_unique<Mlt::Producer>(
+            *profile, avfPath.constData());
+    }
+
+    if (!producer->is_valid()) {
+        qWarning() << "TractorBuilder: INVALID producer for" << path;
         return nullptr;
+    }
+
+    qDebug() << "TractorBuilder: producer valid, service ="
+             << producer->get("mlt_service")
+             << ", length =" << producer->get_length()
+             << ", resource =" << producer->get("resource");
 
     // Store readable title for debugging / MLT XML output
     producer->set("title", clip->name().toUtf8().constData());

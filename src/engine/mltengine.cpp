@@ -6,10 +6,20 @@
 #include <mlt++/MltFactory.h>
 #include <mlt++/MltProfile.h>
 #include <mlt++/MltRepository.h>
+#include <mlt++/MltConsumer.h>
+#include <mlt++/MltProducer.h>
 #include <framework/mlt_factory.h>
+
+#ifdef Q_OS_WIN
+#  ifndef NOMINMAX
+#    define NOMINMAX
+#  endif
+#  include <windows.h>
+#endif
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QDebug>
 #include <algorithm>
 #include <numeric>
 
@@ -30,10 +40,96 @@ bool MltEngine::initialize()
     if (m_initialized)
         return true;
 
-    // Let MLT auto-detect its module directory from the executable location
-    m_repository = Mlt::Factory::init(nullptr);
-    if (!m_repository)
+    // Compute paths relative to the executable so MLT can find its
+    // plugin modules (lib/mlt-7/) and data files (share/mlt-7/).
+    const QDir appDir(QCoreApplication::applicationDirPath());
+    const QString repoPath = appDir.absoluteFilePath(QStringLiteral("lib/mlt-7"));
+    const QString dataPath = appDir.absoluteFilePath(QStringLiteral("share/mlt-7"));
+    const QString profilesPath = dataPath + QStringLiteral("/profiles");
+
+    qputenv("MLT_REPOSITORY", repoPath.toUtf8());
+    qputenv("MLT_DATA",       dataPath.toUtf8());
+    qputenv("MLT_PROFILES_PATH", profilesPath.toUtf8());
+
+    // Tell MLT to skip modules with external dependencies we don't ship.
+    // These cause "Entry Point Not Found" dialogs on Windows because they
+    // were compiled against different library versions (MinGW libstdc++,
+    // different Qt, OpenGL, JACK, OpenCV, etc.).
+    // Colon-separated list of module basenames (without .dll).
+    qputenv("MLT_REPOSITORY_DENY",
+            "libmltglaxnimate-qt6:libmltqt6:"        // wrong Qt version
+            "libmltrtaudio:libmltsox:libmltrubberband:" // missing libstdc++
+            "libmltdecklink:libmltjackrack:"          // hardware/JACK deps
+            "libmltfrei0r:libmltladspa:"              // plugin host deps
+            "libmltmovit:libmltopencv:"               // OpenGL / OpenCV
+            "libmltoldfilm:libmltkdenlive:"            // non-essential
+            "libmltspatialaudio:libmltvidstab:"        // non-essential
+            "libmltxine");                             // non-essential
+
+    // Ensure the exe directory (which has MinGW runtime DLLs like
+    // libgcc_s_seh-1.dll) is on PATH so loaded modules can find them.
+    const QByteArray exeDir = appDir.absolutePath().toUtf8();
+    QByteArray currentPath = qgetenv("PATH");
+    if (!currentPath.contains(exeDir)) {
+        qputenv("PATH", exeDir + ";" + currentPath);
+    }
+
+    qDebug() << "MltEngine: MLT_REPOSITORY =" << repoPath;
+    qDebug() << "MltEngine: MLT_DATA       =" << dataPath;
+    qDebug() << "MltEngine: repo dir exists?" << QDir(repoPath).exists();
+    qDebug() << "MltEngine: data dir exists?" << QDir(dataPath).exists();
+
+    // List module files found in the repository directory
+    {
+        QDir moduleDir(repoPath);
+        const auto entries = moduleDir.entryList(QStringList{QStringLiteral("*.dll")},
+                                                  QDir::Files);
+        qDebug() << "MltEngine: module DLLs found:" << entries.size();
+        for (const auto &e : entries)
+            qDebug() << "  " << e;
+    }
+
+#ifdef Q_OS_WIN
+    // Suppress Windows "Entry Point Not Found" / missing-DLL error
+    // dialogs that appear when MLT tries to load modules compiled against
+    // different library versions (e.g. libmltglaxnimate-qt6, libmltmovit).
+    // The modules simply fail to load silently instead.
+    const UINT oldErrorMode = SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX);
+
+    // Also add the exe directory to the DLL search path so that modules
+    // in lib/mlt-7 can find MinGW runtime DLLs (libgcc, libwinpthread)
+    // that live next to the executable.
+    AddDllDirectory(reinterpret_cast<PCWSTR>(appDir.absolutePath()
+                        .replace(QLatin1Char('/'), QLatin1Char('\\'))
+                        .utf16()));
+#endif
+
+    // Pass the path DIRECTLY to Factory::init — passing nullptr causes MLT
+    // to use a compiled-in default which resolves to "lib/mlt" not "lib/mlt-7".
+    m_repository = Mlt::Factory::init(repoPath.toUtf8().constData());
+
+#ifdef Q_OS_WIN
+    SetErrorMode(oldErrorMode);
+#endif
+    if (!m_repository) {
+        qWarning() << "MltEngine: Factory::init returned null!";
         return false;
+    }
+
+    qDebug() << "MltEngine: Factory::init OK, factory_directory ="
+             << mlt_factory_directory();
+
+    // Check if key services are available
+    {
+        auto *profile = new Mlt::Profile();
+        Mlt::Consumer testSdl(*profile, "sdl2_audio");
+        qDebug() << "MltEngine: sdl2_audio consumer valid?" << testSdl.is_valid();
+        Mlt::Consumer testRtaudio(*profile, "rtaudio");
+        qDebug() << "MltEngine: rtaudio consumer valid?" << testRtaudio.is_valid();
+        Mlt::Producer testColor(*profile, "color:red");
+        qDebug() << "MltEngine: color producer valid?" << testColor.is_valid();
+        delete profile;
+    }
 
     // Default composition: 1080p @ 25fps
     m_compositionProfile = std::make_unique<Mlt::Profile>();

@@ -82,11 +82,11 @@ bool PlaybackController::open()
 
     auto *previewProfile = m_engine->previewProfile();
 
-    // Helper lambda: configure, connect, and start a consumer.
-    // Returns true on success.
+    // Helper lambda: create & configure a consumer (but do NOT start yet).
     auto tryConsumer = [&](const char *name) -> bool {
         m_consumer = std::make_unique<Mlt::Consumer>(*previewProfile, name);
         if (!m_consumer->is_valid()) {
+            qWarning("PlaybackController: consumer '%s' is not valid", name);
             m_consumer.reset();
             return false;
         }
@@ -98,8 +98,16 @@ bool PlaybackController::open()
         m_consumer->set("prefill", 8);
         m_consumer->set("drop_max", 8);
         m_consumer->connect(*m_producer);
-        if (m_consumer->start() == 0)
+
+        // Install frame-show listener BEFORE start (Shotcut's pattern)
+        m_consumer->listen("consumer-frame-show", this,
+                           reinterpret_cast<mlt_listener>(onFrameShow));
+
+        if (m_consumer->start() == 0) {
+            qWarning("PlaybackController: consumer '%s' started OK", name);
             return true;
+        }
+        qWarning("PlaybackController: consumer '%s' failed to start", name);
         m_consumer.reset();
         return false;
     };
@@ -107,13 +115,11 @@ bool PlaybackController::open()
     // ── Use sdl2_audio for audio playback (Shotcut's approach) ─────
     // Video frames are obtained via consumer-frame-show and rendered by Qt.
     if (tryConsumer("sdl2_audio") || tryConsumer("rtaudio")) {
-        // Install frame-show listener so we can grab video frames
-        m_consumer->listen("consumer-frame-show", this,
-                           reinterpret_cast<mlt_listener>(onFrameShow));
         updateState(State::Paused);
         return true;
     }
 
+    qWarning("PlaybackController: no usable consumer found");
     return false;
 }
 
@@ -128,10 +134,12 @@ void PlaybackController::close()
 
 void PlaybackController::play()
 {
-    if (!m_producer) return;
+    if (!m_producer || !m_consumer) return;
 
     m_speed = 1.0;
     m_producer->set_speed(m_speed);
+    // consumer->start() is idempotent — safe to call even if already running
+    m_consumer->start();
     refreshConsumer();
     updateState(State::Playing);
     emit speedChanged(m_speed);
@@ -139,11 +147,14 @@ void PlaybackController::play()
 
 void PlaybackController::pause()
 {
-    if (!m_producer) return;
+    if (!m_producer || !m_consumer) return;
 
     m_speed = 0.0;
     m_producer->set_speed(0.0);
-    m_producer->pause();
+    // Shotcut's pattern: seek to current+1, purge stale frames, restart
+    m_producer->seek(m_consumer->position() + 1);
+    m_consumer->purge();
+    m_consumer->start();
     refreshConsumer();
     updateState(State::Paused);
     emit speedChanged(m_speed);
@@ -156,7 +167,10 @@ void PlaybackController::stop()
     m_speed = 0.0;
     m_producer->set_speed(0.0);
     m_producer->seek(0);
-    refreshConsumer();
+    if (m_consumer) {
+        m_consumer->purge();
+        refreshConsumer();
+    }
     updateState(State::Stopped);
     emit positionChanged(0);
     emit speedChanged(m_speed);
@@ -179,6 +193,10 @@ void PlaybackController::stepFrames(int frames)
 
     const int newPos = m_producer->position() + frames;
     m_producer->seek(qMax(0, newPos));
+    if (m_consumer) {
+        m_consumer->purge();
+        m_consumer->start();
+    }
     refreshConsumer();
     emit positionChanged(m_producer->position());
 }
@@ -188,6 +206,12 @@ void PlaybackController::seek(int frame)
     if (!m_producer) return;
 
     m_producer->seek(qMax(0, frame));
+    if (m_consumer) {
+        if (m_consumer->is_stopped())
+            m_consumer->start();
+        else
+            m_consumer->purge();
+    }
     refreshConsumer();
     emit positionChanged(m_producer->position());
 }
@@ -211,7 +235,7 @@ void PlaybackController::setScrubAudioEnabled(bool enabled)
 
 void PlaybackController::playForward()
 {
-    if (!m_producer) return;
+    if (!m_producer || !m_consumer) return;
 
     if (m_speed < 0.0)
         m_speed = 1.0;
@@ -221,6 +245,7 @@ void PlaybackController::playForward()
         m_speed = std::min(m_speed * 2.0, 32.0);
 
     m_producer->set_speed(m_speed);
+    m_consumer->start();
     refreshConsumer();
     updateState(State::Playing);
     emit speedChanged(m_speed);
@@ -228,7 +253,7 @@ void PlaybackController::playForward()
 
 void PlaybackController::playReverse()
 {
-    if (!m_producer) return;
+    if (!m_producer || !m_consumer) return;
 
     if (m_speed > 0.0)
         m_speed = -1.0;
@@ -238,6 +263,7 @@ void PlaybackController::playReverse()
         m_speed = std::max(m_speed * 2.0, -32.0);
 
     m_producer->set_speed(m_speed);
+    m_consumer->start();
     refreshConsumer();
     updateState(State::Playing);
     emit speedChanged(m_speed);

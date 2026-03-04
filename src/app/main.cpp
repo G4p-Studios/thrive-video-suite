@@ -17,9 +17,45 @@
 #include <QSettings>
 #include <QProcess>
 #include <QStringList>
+#include <QFile>
+#include <QFileInfo>
+#include <QDateTime>
+
+// Write Qt debug/warning messages to a log file next to the exe
+static QFile *g_logFile = nullptr;
+static void logMessageHandler(QtMsgType type, const QMessageLogContext &ctx, const QString &msg)
+{
+    if (!g_logFile) return;
+    const char *tag = "DEBUG";
+    switch (type) {
+    case QtWarningMsg:  tag = "WARN "; break;
+    case QtCriticalMsg: tag = "CRIT "; break;
+    case QtFatalMsg:    tag = "FATAL"; break;
+    default: break;
+    }
+    g_logFile->write(QStringLiteral("[%1] %2\n")
+                         .arg(QLatin1String(tag), msg).toUtf8());
+    g_logFile->flush();
+}
 
 int main(int argc, char *argv[])
 {
+    // Install log file handler before anything else.
+    // QCoreApplication::applicationDirPath() is empty before QApplication
+    // construction, so derive the exe directory from argv[0].
+    const QFileInfo exeInfo(QString::fromLocal8Bit(argv[0]));
+    const QString exeDir = exeInfo.absolutePath();
+    const QString logPath = exeDir + QStringLiteral("/thrive_debug.log");
+    QFile logFile(logPath);
+    if (!logFile.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        // Fallback: try a hardcoded path
+        logFile.setFileName(QStringLiteral("C:/Users/alex/thrive_debug.log"));
+        logFile.open(QIODevice::WriteOnly | QIODevice::Truncate);
+    }
+    g_logFile = &logFile;
+    qInstallMessageHandler(logMessageHandler);
+    qDebug() << "Thrive Video Suite starting, log at:" << logFile.fileName();
+
     QApplication app(argc, argv);
     app.setApplicationName(QLatin1String(Thrive::kAppName));
     app.setOrganizationName(QLatin1String(Thrive::kOrgName));

@@ -309,6 +309,38 @@ if exist "%BUILD_DIR%\thrive-video-suite.exe" (
     for %%F in ("%MLT_DIR%\bin\*.dll") do copy /y "%%F" "%BUILD_DIR%\" >nul 2>&1
     REM Copy all vcpkg DLLs to build output
     for %%F in ("%VCPKG_INSTALLED%\bin\*.dll") do copy /y "%%F" "%BUILD_DIR%\" >nul 2>&1
+
+    REM Deploy MLT module plugins (avformat, sdl2, etc.) — without these
+    REM MLT cannot decode media files or play audio
+    if exist "%MLT_DIR%\lib\mlt-7" (
+        xcopy /E /I /Y "%MLT_DIR%\lib\mlt-7" "%BUILD_DIR%\lib\mlt-7" >nul 2>&1
+        REM Remove modules compiled against incompatible libraries.
+        REM  - glaxnimate-qt6/qt6: built against different Qt version
+        REM  - movit: requires OpenGL extensions not always present
+        REM  - decklink, jackrack, opencv, frei0r, ladspa, sox,
+        REM    spatialaudio, vidstab, rubberband, xine, oldfilm:
+        REM    have external deps not bundled with us
+        for %%M in (glaxnimate-qt6 qt6 movit decklink jackrack opencv frei0r ladspa sox spatialaudio vidstab rubberband xine oldfilm kdenlive rtaudio) do (
+            del /q "%BUILD_DIR%\lib\mlt-7\libmlt%%M.dll" >nul 2>&1
+        )
+        REM Copy MinGW runtime DLLs into module dir so they can find deps
+        copy /y "%MLT_DIR%\bin\libgcc_s_seh-1.dll" "%BUILD_DIR%\lib\mlt-7\" >nul 2>&1
+        copy /y "%MLT_DIR%\bin\libwinpthread-1.dll" "%BUILD_DIR%\lib\mlt-7\" >nul 2>&1
+        copy /y "%MLT_DIR%\bin\libmlt-7.dll" "%BUILD_DIR%\lib\mlt-7\" >nul 2>&1
+        copy /y "%MLT_DIR%\bin\libmlt++-7.dll" "%BUILD_DIR%\lib\mlt-7\" >nul 2>&1
+    )
+    REM Deploy MLT data files (profiles, service metadata)
+    if exist "%MLT_DIR%\share\mlt-7" (
+        xcopy /E /I /Y "%MLT_DIR%\share\mlt-7" "%BUILD_DIR%\share\mlt-7" >nul 2>&1
+    )
+
+    REM Deploy FFmpeg master DLLs (avcodec-62 etc.) required by libmltavformat
+    set "FFMPEG_BIN=C:\dev\thrive-deps\ffmpeg-master\ffmpeg-master-latest-win64-lgpl-shared\bin"
+    if exist "%FFMPEG_BIN%\avcodec-62.dll" (
+        for %%F in (avcodec-62 avdevice-62 avfilter-11 avformat-62 avutil-60 swresample-6 swscale-9) do (
+            copy /y "%FFMPEG_BIN%\%%F.dll" "%BUILD_DIR%\" >nul 2>&1
+        )
+    )
 )
 
 REM ====================================================================
