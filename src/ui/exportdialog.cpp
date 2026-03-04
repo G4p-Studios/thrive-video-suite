@@ -52,10 +52,11 @@ ExportDialog::ExportDialog(QWidget *parent)
     // Video codec
     m_vcodecCombo = new QComboBox(this);
     m_vcodecCombo->setAccessibleName(tr("Video codec"));
-    m_vcodecCombo->addItem(tr("H.264 (libx264)"), QStringLiteral("libx264"));
-    m_vcodecCombo->addItem(tr("H.265 (libx265)"), QStringLiteral("libx265"));
-    m_vcodecCombo->addItem(tr("VP9"),             QStringLiteral("libvpx-vp9"));
-    m_vcodecCombo->addItem(tr("MPEG-4"),          QStringLiteral("mpeg4"));
+    m_vcodecCombo->addItem(tr("H.264 (OpenH264)"),  QStringLiteral("libopenh264"));
+    m_vcodecCombo->addItem(tr("MPEG-4"),            QStringLiteral("mpeg4"));
+    m_vcodecCombo->addItem(tr("VP9"),               QStringLiteral("libvpx-vp9"));
+    m_vcodecCombo->addItem(tr("AV1 (SVT-AV1)"),     QStringLiteral("libsvtav1"));
+    m_vcodecCombo->addItem(tr("AV1 (libaom)"),      QStringLiteral("libaom-av1"));
     form->addRow(tr("&Video codec:"), m_vcodecCombo);
 
     // Audio codec

@@ -89,9 +89,17 @@ MainWindow::MainWindow(Project *project,
     // Load audio cues so they actually play during navigation
     m_cues->loadCues();
 
+    // Debounce timer: coalesces rapid rebuildTractor calls so the
+    // consumer is not torn down / re-created many times per second.
+    m_rebuildTimer = new QTimer(this);
+    m_rebuildTimer->setSingleShot(true);
+    m_rebuildTimer->setInterval(100);          // 100 ms debounce
+    connect(m_rebuildTimer, &QTimer::timeout,
+            this, &MainWindow::rebuildTractor);
+
     // Rebuild the MLT pipeline whenever the timeline model changes
     connect(m_project->timeline(), &Timeline::tracksChanged,
-            this, &MainWindow::rebuildTractor);
+            this, &MainWindow::deferRebuildTractor);
 
     // Safely handle timeline replacement (e.g. Project::reset)
     connect(m_project, &Project::timelineAboutToChange,
@@ -100,12 +108,20 @@ MainWindow::MainWindow(Project *project,
                 m_project->timeline()->disconnect(this);
             });
 
-    // When a new tractor is ready, reconnect playback
+    // When a new tractor is ready, update the producer reference.
+    // The consumer is NOT started here — only an explicit Play command
+    // (or step/seek) will open it.  This avoids the crash caused by
+    // rapid close/open cycles when clips are added in quick succession.
     connect(m_tractorBuilder, &TractorBuilder::tractorReady,
             this, [this](Mlt::Tractor *tractor) {
+                const bool wasPlaying =
+                    m_playback->state() == PlaybackController::State::Playing;
                 m_playback->close();
                 m_playback->setProducer(tractor);
-                m_playback->open();
+                if (wasPlaying) {
+                    m_playback->open();
+                    m_playback->play();
+                }
             });
 
     // Sync playback position → timeline playhead
@@ -477,9 +493,11 @@ void MainWindow::createActions()
 
         m_undoStack->push(new RemoveClipCommand(trk, idx));
         m_modified = true;
-        rebuildTractor();
+        deferRebuildTractor();
+        m_cues->play(AudioCueManager::Cue::ClipRemoved);
         m_announcer->announce(
-            tr("Cut: %1").arg(clipName), Announcer::Priority::Normal);
+            tr("Cut: %1").arg(clipName),
+            Announcer::Priority::Normal);
     });
 
     connect(m_actCopy, &QAction::triggered, this, [this]() {
@@ -552,9 +570,11 @@ void MainWindow::createActions()
         const QString name = trk->clipAt(idx)->name();
         m_undoStack->push(new RemoveClipCommand(trk, idx));
         m_modified = true;
-        rebuildTractor();
+        deferRebuildTractor();
+        m_cues->play(AudioCueManager::Cue::ClipRemoved);
         m_announcer->announce(
-            tr("Deleted: %1").arg(name), Announcer::Priority::Normal);
+            tr("Removed %1 from %2.").arg(name, trk->name()),
+            Announcer::Priority::High);
     });
 
     connect(m_actSelectAll, &QAction::triggered, this, [this]() {
@@ -1281,12 +1301,22 @@ void MainWindow::createDockWidgets()
                 auto *profile = m_engine ? m_engine->compositionProfile()
                                          : nullptr;
                 if (profile) {
-                    Mlt::Producer probe(*profile,
-                                        filePath.toUtf8().constData());
-                    if (probe.is_valid()) {
+                    const QByteArray pathUtf8 = filePath.toUtf8();
+                    Mlt::Producer probe(*profile, pathUtf8.constData());
+                    if (!probe.is_valid()) {
+                        // Bare path often fails on Windows; retry with
+                        // the explicit avformat: service prefix.
+                        const QByteArray avfPath = "avformat:" + pathUtf8;
+                        Mlt::Producer probe2(*profile, avfPath.constData());
+                        if (probe2.is_valid())
+                            length = probe2.get_length();
+                    } else {
                         length = probe.get_length();
                     }
                 }
+
+                qDebug() << "Media import: probed length =" << length
+                         << "frames for" << filePath;
 
                 // Fallback: 5 seconds if probe returned nothing usable
                 if (length <= 0)
@@ -1318,11 +1348,13 @@ void MainWindow::createDockWidgets()
 
                 m_undoStack->push(new AddClipCommand(trk, clip));
                 m_modified = true;
-                rebuildTractor();
+                deferRebuildTractor();
 
+                m_cues->play(AudioCueManager::Cue::ClipAdded);
                 m_announcer->announce(
-                    tr("Added %1 to %2 (%3).")
+                    tr("Added %1 to %2 at %3 (%4).")
                         .arg(clip->name(), trk->name(),
+                             clip->timelinePosition().toSpokenString(),
                              clip->duration().toSpokenString()),
                     Announcer::Priority::High);
             });
@@ -1462,13 +1494,21 @@ void MainWindow::rebuildTractor()
     m_timeline->refresh();
 }
 
+void MainWindow::deferRebuildTractor()
+{
+    // Restart the debounce timer.  If multiple calls arrive within
+    // 100 ms the tractor is only rebuilt once – preventing the
+    // consumer close/open race that crashes on rapid clip additions.
+    m_rebuildTimer->start();
+}
+
 void MainWindow::reconnectTimeline()
 {
     auto *tl = m_project->timeline();
 
     // Reconnect the tracksChanged signal to rebuild the MLT pipeline
     connect(tl, &Timeline::tracksChanged,
-            this, &MainWindow::rebuildTractor);
+            this, &MainWindow::deferRebuildTractor);
 
     // Update the TimelineWidget and TransportBar to use the new Timeline
     m_timeline->setTimeline(tl);

@@ -8,11 +8,14 @@
 #include <QQueue>
 #include <QTimer>
 
+class QWidget;
+
 namespace Thrive {
 
 /// Manages a queue of screen reader announcements with priority levels.
-/// High-priority messages (navigation feedback) interrupt current speech;
-/// low-priority messages (status updates) are queued and spoken in order.
+/// Uses Qt's native QAccessibleAnnouncementEvent (Qt 6.8+) to send
+/// notifications through the UIA bridge that NVDA monitors directly.
+/// Prism is used as a fallback for braille output.
 class Announcer : public QObject
 {
     Q_OBJECT
@@ -26,6 +29,10 @@ public:
     Q_ENUM(Priority)
 
     explicit Announcer(QObject *parent = nullptr);
+
+    /// Set the widget used as the source for accessibility events.
+    /// Must be called before announce() will work. Typically the main window.
+    void setTarget(QWidget *target) { m_target = target; }
 
     /// Queue a message for announcement.
     void announce(const QString &text, Priority priority = Priority::Normal);
@@ -41,12 +48,15 @@ private slots:
     void processQueue();
 
 private:
+    void sendAccessibleAnnouncement(const QString &text, bool assertive);
+
     struct Message {
         QString  text;
         Priority priority;
     };
 
     bool m_enabled = true;
+    QWidget *m_target = nullptr;
     QQueue<Message> m_queue;
     QTimer m_processTimer;
 };

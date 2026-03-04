@@ -63,6 +63,7 @@ private:
     void checkAutoSaveRecovery();
     void removeAutoSaveFile();
     void rebuildTractor();
+    void deferRebuildTractor();
     void reconnectTimeline();
     void updateWindowTitle();
     void addRecentProject(const QString &path);
@@ -151,6 +152,9 @@ private:
 
     // Auto-save
     QTimer  *m_autoSaveTimer     = nullptr;
+
+    // Debounce timer for tractor rebuilds
+    QTimer  *m_rebuildTimer      = nullptr;
 
     // Recent projects
     QMenu   *m_recentMenu        = nullptr;

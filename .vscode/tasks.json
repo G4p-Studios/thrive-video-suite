@@ -1,0 +1,101 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build Thrive",
+			"type": "shell",
+			"command": "cd C:\\Users\\alex\\thrive-video-suite && .\\build.bat",
+			"problemMatcher": [
+				"$msCompile"
+			]
+		},
+		{
+			"label": "Build Thrive",
+			"type": "shell",
+			"command": "Set-Location C:\\Users\\alex\\thrive-video-suite; .\\build.bat",
+			"problemMatcher": [
+				"$msCompile"
+			]
+		},
+		{
+			"label": "Build Thrive Suite",
+			"type": "shell",
+			"command": "cmd /c \"cd /d C:\\Users\\alex\\thrive-video-suite & build.bat\"",
+			"problemMatcher": [
+				"$msCompile"
+			]
+		},
+		{
+			"label": "Build TVS",
+			"type": "shell",
+			"command": "cmd.exe /c 'cd /d C:\\Users\\alex\\thrive-video-suite && build.bat'",
+			"problemMatcher": [
+				"$msCompile"
+			]
+		},
+		{
+			"label": "Test TVS",
+			"type": "shell",
+			"command": "cmd.exe /c 'cd /d C:\\Users\\alex\\thrive-video-suite && build.bat test'",
+			"problemMatcher": [
+				"$msCompile"
+			]
+		},
+		{
+			"label": "Build TVS2",
+			"type": "shell",
+			"command": "cmd.exe /c 'cd /d C:\\Users\\alex\\thrive-video-suite && build.bat'",
+			"problemMatcher": [
+				"$msCompile"
+			]
+		},
+		{
+			"label": "Build TVS3",
+			"type": "shell",
+			"command": "cmd.exe /c 'cd /d C:\\Users\\alex\\thrive-video-suite && build.bat'",
+			"problemMatcher": [
+				"$msCompile"
+			]
+		},
+		{
+			"label": "Test TVS2",
+			"type": "shell",
+			"command": "cmd.exe /c 'cd /d C:\\Users\\alex\\thrive-video-suite && build.bat test'",
+			"problemMatcher": [
+				"$msCompile"
+			]
+		},
+		{
+			"label": "Build TVS4",
+			"type": "shell",
+			"command": "cmd.exe /c 'cd /d C:\\Users\\alex\\thrive-video-suite && build.bat'",
+			"problemMatcher": [
+				"$msCompile"
+			]
+		},
+		{
+			"label": "Test TVS3",
+			"type": "shell",
+			"command": "cmd.exe /c 'cd /d C:\\Users\\alex\\thrive-video-suite && build.bat test'",
+			"problemMatcher": [
+				"$msCompile"
+			]
+		},
+		{
+			"label": "Build TVS5",
+			"type": "shell",
+			"command": "cmd.exe /c 'cd /d C:\\Users\\alex\\thrive-video-suite && build.bat'",
+			"problemMatcher": [
+				"$msCompile"
+			]
+		},
+		{
+			"label": "Test TVS4",
+			"type": "shell",
+			"command": "cmd.exe /c 'cd /d C:\\Users\\alex\\thrive-video-suite && build.bat test'",
+			"problemMatcher": [
+				"$msCompile"
+			]
+		}
+	]
+}

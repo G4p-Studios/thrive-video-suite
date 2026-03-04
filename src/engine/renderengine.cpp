@@ -12,6 +12,7 @@
 #include <QTimer>
 #include <QTemporaryFile>
 #include <QFile>
+#include <QDebug>
 
 namespace Thrive {
 
@@ -43,30 +44,37 @@ bool RenderEngine::startRender(Mlt::Producer *producer,
     // during export don't corrupt the render pipeline.
     auto *profile = m_engine->compositionProfile();
 
-    // Serialize via the xml consumer into a temp file, then reload
+    // Serialize via the xml consumer into a temp file, then reload.
+    // We keep the temp file path alive so the producer can reference it.
     {
         QTemporaryFile tmpFile;
-        tmpFile.setAutoRemove(true);
+        tmpFile.setAutoRemove(false); // we remove manually later
         if (tmpFile.open()) {
-            const QByteArray tmpPath = tmpFile.fileName().toUtf8();
+            m_xmlTempPath = tmpFile.fileName();
             tmpFile.close();
 
-            Mlt::Consumer xmlCons(*profile, "xml", tmpPath.constData());
+            Mlt::Consumer xmlCons(*profile, "xml",
+                                  m_xmlTempPath.toUtf8().constData());
             if (xmlCons.is_valid()) {
                 xmlCons.set("no_meta", 1);
                 xmlCons.connect(*producer);
                 xmlCons.run();
 
+                const QByteArray xmlPath =
+                    QStringLiteral("xml:%1").arg(m_xmlTempPath).toUtf8();
                 m_clonedProducer = std::make_unique<Mlt::Producer>(
-                    *profile, tmpPath.constData());
+                    *profile, xmlPath.constData());
             }
         }
     }
 
     if (m_clonedProducer && m_clonedProducer->is_valid()) {
         m_producer = m_clonedProducer.get();
+        qDebug() << "RenderEngine: cloned producer valid, length ="
+                 << m_producer->get_length();
     } else {
         // Fallback: use the original pointer directly
+        qWarning() << "RenderEngine: clone failed, using original producer";
         m_clonedProducer.reset();
         m_producer = producer;
     }
@@ -76,8 +84,10 @@ bool RenderEngine::startRender(Mlt::Producer *producer,
     // Create consumer at full composition resolution
     m_renderConsumer = std::make_unique<Mlt::Consumer>(*profile, "avformat");
 
-    if (!m_renderConsumer->is_valid())
+    if (!m_renderConsumer->is_valid()) {
+        qWarning() << "RenderEngine: avformat consumer is INVALID";
         return false;
+    }
 
     m_renderConsumer->set("target", outputPath.toUtf8().constData());
     m_renderConsumer->set("real_time", -1); // render as fast as possible
@@ -100,8 +110,11 @@ bool RenderEngine::startRender(Mlt::Producer *producer,
     m_renderConsumer->set("progressive", 1);
 
     m_renderConsumer->connect(*m_producer);
-    m_producer->set_speed(0.0);
     m_producer->seek(0);
+
+    qDebug() << "RenderEngine: starting export to" << outputPath
+             << "format=" << format << "vcodec=" << vcodec
+             << "acodec=" << acodec << "frames=" << m_totalFrames;
 
     m_renderConsumer->start();
     m_rendering = true;
@@ -123,6 +136,11 @@ bool RenderEngine::startRender(Mlt::Producer *producer,
             m_rendering = false;
             timer->stop();
             timer->deleteLater();
+            // Clean up temp XML file
+            if (!m_xmlTempPath.isEmpty()) {
+                QFile::remove(m_xmlTempPath);
+                m_xmlTempPath.clear();
+            }
             emit renderProgress(100);
             emit renderFinished(true);
         }
@@ -145,6 +163,12 @@ void RenderEngine::cancelRender()
     m_renderConsumer.reset();
     m_clonedProducer.reset();
     m_outputPath.clear();
+
+    // Clean up the XML temp file used for cloning
+    if (!m_xmlTempPath.isEmpty()) {
+        QFile::remove(m_xmlTempPath);
+        m_xmlTempPath.clear();
+    }
 }
 
 int RenderEngine::progressPercent() const

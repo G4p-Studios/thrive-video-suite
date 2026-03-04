@@ -21,6 +21,8 @@ void AudioCueManager::loadCues()
         { Cue::TrackBoundary,  QStringLiteral("qrc:/sounds/track_boundary.wav")  },
         { Cue::Selection,      QStringLiteral("qrc:/sounds/selection.wav")       },
         { Cue::Error,          QStringLiteral("qrc:/sounds/error.wav")           },
+        { Cue::ClipAdded,      QStringLiteral("qrc:/sounds/selection.wav")       },
+        { Cue::ClipRemoved,    QStringLiteral("qrc:/sounds/clip_end.wav")        },
     };
 
     for (auto it = paths.cbegin(); it != paths.cend(); ++it) {

@@ -134,7 +134,11 @@ void PlaybackController::close()
 
 void PlaybackController::play()
 {
-    if (!m_producer || !m_consumer) return;
+    if (!m_producer) return;
+
+    // Auto-open the consumer if it hasn't been created yet
+    if (!m_consumer && !open())
+        return;
 
     m_speed = 1.0;
     m_producer->set_speed(m_speed);
@@ -181,12 +185,16 @@ void PlaybackController::togglePlayPause()
     if (m_state == State::Playing)
         pause();
     else
-        play();
+        play();   // play() will auto-open the consumer if needed
 }
 
 void PlaybackController::stepFrames(int frames)
 {
     if (!m_producer) return;
+
+    // Auto-open consumer for frame preview if needed
+    if (!m_consumer && !open())
+        return;
 
     if (m_state == State::Playing)
         pause();
@@ -204,6 +212,10 @@ void PlaybackController::stepFrames(int frames)
 void PlaybackController::seek(int frame)
 {
     if (!m_producer) return;
+
+    // Auto-open consumer for frame preview if needed
+    if (!m_consumer && !open())
+        return;
 
     m_producer->seek(qMax(0, frame));
     if (m_consumer) {

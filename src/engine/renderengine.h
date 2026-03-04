@@ -58,6 +58,7 @@ private:
     std::unique_ptr<Mlt::Producer> m_clonedProducer;
     Mlt::Producer *m_producer = nullptr;
     QString m_outputPath;
+    QString m_xmlTempPath;
     bool m_rendering = false;
     int  m_totalFrames = 0;
 };

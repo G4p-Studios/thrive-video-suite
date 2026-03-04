@@ -4,6 +4,11 @@
 #include "announcer.h"
 #include "screenreader.h"
 
+#include <QAccessible>
+#include <QAccessibleAnnouncementEvent>
+#include <QWidget>
+#include <QDebug>
+
 namespace Thrive {
 
 Announcer::Announcer(QObject *parent)
@@ -22,7 +27,7 @@ void Announcer::announce(const QString &text, Priority priority)
     // High priority: speak immediately, interrupting everything
     if (priority == Priority::High) {
         m_queue.clear();
-        ScreenReader::instance().output(text, /*interrupt=*/true);
+        sendAccessibleAnnouncement(text, /*assertive=*/true);
         return;
     }
 
@@ -53,11 +58,29 @@ void Announcer::processQueue()
 
     // Process one message per tick
     const auto msg = m_queue.dequeue();
-    ScreenReader::instance().output(msg.text, /*interrupt=*/false);
+    sendAccessibleAnnouncement(msg.text, /*assertive=*/false);
 
     // Schedule next if more messages remain
     if (!m_queue.isEmpty())
         m_processTimer.start();
+}
+
+void Announcer::sendAccessibleAnnouncement(const QString &text,
+                                           bool assertive)
+{
+    // Primary path: Qt's native accessibility announcement event.
+    // This sends a UIA Notification through the same bridge NVDA monitors,
+    // so it is far more reliable than Prism's separate NVDA controller.
+    if (m_target) {
+        QAccessibleAnnouncementEvent ev(m_target, text);
+        ev.setPoliteness(assertive
+                             ? QAccessible::AnnouncementPoliteness::Assertive
+                             : QAccessible::AnnouncementPoliteness::Polite);
+        QAccessible::updateAccessibility(&ev);
+    }
+
+    // Also send through Prism for braille display output
+    ScreenReader::instance().braille(text);
 }
 
 } // namespace Thrive

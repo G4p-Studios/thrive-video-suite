@@ -22,7 +22,9 @@ public:
         Gap,             ///< Playhead is over an empty gap between clips
         TrackBoundary,   ///< Navigated past the first or last track
         Selection,       ///< Item selected / deselected
-        Error            ///< Invalid operation attempted
+        Error,           ///< Invalid operation attempted
+        ClipAdded,       ///< A clip was added to the timeline
+        ClipRemoved      ///< A clip was removed from the timeline
     };
     Q_ENUM(Cue)
 

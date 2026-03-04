@@ -112,6 +112,7 @@ int main(int argc, char *argv[])
 
     // ── Main window ─────────────────────────────────────────────────
     Thrive::MainWindow window(&project, &engine, announcer, cues);
+    announcer->setTarget(&window);
     window.show();
 
     announcer->announce(
