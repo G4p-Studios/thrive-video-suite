@@ -16,11 +16,7 @@ VideoPreviewWidget::VideoPreviewWidget(QWidget *parent)
     setAccessibleDescription(
         tr("Displays a preview of the timeline video output."));
 
-    // Ensure a native window handle is created immediately so the
-    // SDL2 consumer has a valid target before the first paint.
-    setAttribute(Qt::WA_NativeWindow);
     setAttribute(Qt::WA_OpaquePaintEvent);
-    setAttribute(Qt::WA_NoSystemBackground);
 
     // Dark background while nothing is playing
     QPalette pal = palette();
@@ -34,10 +30,10 @@ VideoPreviewWidget::VideoPreviewWidget(QWidget *parent)
     setFocusPolicy(Qt::ClickFocus);
 }
 
-quintptr VideoPreviewWidget::nativeWindowId()
+void VideoPreviewWidget::updateFrame(const QImage &frame)
 {
-    // winId() implicitly creates the native window if it doesn't exist
-    return static_cast<quintptr>(winId());
+    m_currentFrame = frame;
+    update();
 }
 
 QSize VideoPreviewWidget::sizeHint() const
@@ -48,11 +44,18 @@ QSize VideoPreviewWidget::sizeHint() const
 
 void VideoPreviewWidget::paintEvent(QPaintEvent * /*event*/)
 {
-    // Paint black when the consumer is not rendering (e.g. stopped state).
-    // Once SDL2 takes over this window, it paints its own frames and
-    // our paintEvent is effectively a no-op.
     QPainter p(this);
     p.fillRect(rect(), Qt::black);
+
+    if (!m_currentFrame.isNull()) {
+        // Scale the frame to fit the widget while preserving aspect ratio
+        const QSize scaled = m_currentFrame.size().scaled(
+            size(), Qt::KeepAspectRatio);
+        const int x = (width()  - scaled.width())  / 2;
+        const int y = (height() - scaled.height()) / 2;
+        p.drawImage(QRect(x, y, scaled.width(), scaled.height()),
+                    m_currentFrame);
+    }
 }
 
 } // namespace Thrive

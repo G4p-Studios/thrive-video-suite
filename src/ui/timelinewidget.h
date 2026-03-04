@@ -55,6 +55,7 @@ protected:
 private:
     void updateStatusLabel();
     void connectTrackSignals();
+    void notifyCellFocus();
 
     Timeline           *m_timeline           = nullptr;
     Announcer          *m_announcer          = nullptr;

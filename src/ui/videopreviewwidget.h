@@ -3,15 +3,15 @@
 
 #pragma once
 
+#include <QImage>
 #include <QWidget>
 
 namespace Thrive {
 
-/// A lightweight QWidget whose sole purpose is to provide a native
-/// window handle (`winId()`) that the SDL2 consumer can render into.
+/// Displays video preview frames received from the PlaybackController.
 ///
-/// The widget paints itself black when idle (no consumer connected)
-/// and lets SDL draw over it during playback.
+/// The sdl2_audio consumer handles audio; video frames arrive via the
+/// consumer-frame-show event and are painted here by Qt.
 class VideoPreviewWidget : public QWidget
 {
     Q_OBJECT
@@ -19,15 +19,18 @@ class VideoPreviewWidget : public QWidget
 public:
     explicit VideoPreviewWidget(QWidget *parent = nullptr);
 
-    /// The native window ID that should be passed to the SDL2 consumer
-    /// via the "window_id" property.
-    [[nodiscard]] quintptr nativeWindowId();
-
     /// Recommended size for the preview area.
     [[nodiscard]] QSize sizeHint() const override;
 
+public slots:
+    /// Receive a decoded video frame for display.
+    void updateFrame(const QImage &frame);
+
 protected:
     void paintEvent(QPaintEvent *event) override;
+
+private:
+    QImage m_currentFrame;
 };
 
 } // namespace Thrive

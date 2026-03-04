@@ -105,10 +105,6 @@ MainWindow::MainWindow(Project *project,
             this, [this](Mlt::Tractor *tractor) {
                 m_playback->close();
                 m_playback->setProducer(tractor);
-                // Pass the preview widget's native window handle so the
-                // SDL2 consumer renders video into our embedded widget.
-                if (m_preview)
-                    m_playback->setWindowId(m_preview->nativeWindowId());
                 m_playback->open();
             });
 
@@ -1186,6 +1182,10 @@ void MainWindow::createDockWidgets()
     centralSplitter->setStretchFactor(0, 2);
     centralSplitter->setStretchFactor(1, 1);
     setCentralWidget(centralSplitter);
+
+    // Route video frames from the playback consumer to the preview widget
+    connect(m_playback, &PlaybackController::frameRendered,
+            m_preview, &VideoPreviewWidget::updateFrame);
 
     // Transport bar (bottom)
     m_transport = new TransportBar(

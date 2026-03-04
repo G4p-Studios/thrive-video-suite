@@ -8,8 +8,47 @@
 #include <mlt++/MltProducer.h>
 #include <mlt++/MltProfile.h>
 
+#include <framework/mlt_events.h>
+#include <framework/mlt_frame.h>
+#include <framework/mlt_properties.h>
+
 #include <QTimer>
 #include <cmath>
+
+// ── File-local consumer-frame-show callback ─────────────────────────
+// Called on the MLT consumer thread for every frame "shown".
+// We increment the frame's refcount, then post to the GUI thread for
+// image decoding (mlt_frame_get_image is heavy and must not run on the
+// consumer's audio thread).
+static void onFrameShow(mlt_properties /*owner*/, void *self,
+                        mlt_event_data data)
+{
+    auto *pc = static_cast<Thrive::PlaybackController *>(self);
+
+    // Drop if the GUI is still processing the previous frame
+    if (pc->frameProcessingFlag().load(std::memory_order_acquire))
+        return;
+
+    mlt_frame frame = mlt_event_data_to_frame(data);
+    if (!frame)
+        return;
+
+    mlt_properties_inc_ref(MLT_FRAME_PROPERTIES(frame));
+    pc->frameProcessingFlag().store(true, std::memory_order_release);
+
+    QMetaObject::invokeMethod(pc, [pc, frame]() {
+        uint8_t *buf = nullptr;
+        mlt_image_format fmt = mlt_image_rgba;
+        int w = 0, h = 0;
+        int err = mlt_frame_get_image(frame, &buf, &fmt, &w, &h, 0);
+        if (!err && buf && w > 0 && h > 0) {
+            QImage img(buf, w, h, w * 4, QImage::Format_RGBA8888);
+            emit pc->frameRendered(img.copy());
+        }
+        mlt_frame_close(frame);
+        pc->frameProcessingFlag().store(false, std::memory_order_release);
+    }, Qt::QueuedConnection);
+}
 
 namespace Thrive {
 
@@ -36,11 +75,6 @@ void PlaybackController::setProducer(Mlt::Producer *producer)
     m_producer = producer;
 }
 
-void PlaybackController::setWindowId(quintptr id)
-{
-    m_windowId = id;
-}
-
 bool PlaybackController::open()
 {
     if (!m_engine || !m_engine->isInitialized() || !m_producer)
@@ -48,38 +82,39 @@ bool PlaybackController::open()
 
     auto *previewProfile = m_engine->previewProfile();
 
-    if (m_windowId != 0) {
-        // Preferred path: use the SDL2 consumer with an embedded window
-        // so video is rendered inside the application's preview widget.
-        m_consumer = std::make_unique<Mlt::Consumer>(*previewProfile, "sdl2");
-        if (m_consumer->is_valid()) {
-            m_consumer->set("window_id",
-                           static_cast<int64_t>(m_windowId));
-        } else {
+    // Helper lambda: configure, connect, and start a consumer.
+    // Returns true on success.
+    auto tryConsumer = [&](const char *name) -> bool {
+        m_consumer = std::make_unique<Mlt::Consumer>(*previewProfile, name);
+        if (!m_consumer->is_valid()) {
             m_consumer.reset();
+            return false;
         }
-    }
-
-    // Fallback chain if SDL2 with window_id failed or no window was set
-    if (!m_consumer) {
-        static const char *fallbacks[] = { "sdl2_audio", "sdl2", "rtaudio" };
-        for (const char *name : fallbacks) {
-            m_consumer = std::make_unique<Mlt::Consumer>(*previewProfile, name);
-            if (m_consumer->is_valid())
-                break;
-            m_consumer.reset();
-        }
-    }
-    if (!m_consumer)
+        // Core properties (following Shotcut's approach)
+        m_consumer->set("scrub_audio", m_scrubAudio ? 1 : 0);
+        m_consumer->set("real_time", 1);
+        m_consumer->set("channels", 2);
+        m_consumer->set("buffer", 25);   // frame buffer
+        m_consumer->set("prefill", 8);
+        m_consumer->set("drop_max", 8);
+        m_consumer->connect(*m_producer);
+        if (m_consumer->start() == 0)
+            return true;
+        m_consumer.reset();
         return false;
+    };
 
-    m_consumer->set("scrub_audio", m_scrubAudio ? 1 : 0);
-    m_consumer->set("real_time", 1);
-    m_consumer->connect(*m_producer);
-    m_consumer->start();
+    // ── Use sdl2_audio for audio playback (Shotcut's approach) ─────
+    // Video frames are obtained via consumer-frame-show and rendered by Qt.
+    if (tryConsumer("sdl2_audio") || tryConsumer("rtaudio")) {
+        // Install frame-show listener so we can grab video frames
+        m_consumer->listen("consumer-frame-show", this,
+                           reinterpret_cast<mlt_listener>(onFrameShow));
+        updateState(State::Paused);
+        return true;
+    }
 
-    updateState(State::Paused);
-    return true;
+    return false;
 }
 
 void PlaybackController::close()

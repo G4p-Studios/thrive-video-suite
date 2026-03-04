@@ -29,6 +29,10 @@ public:
     void       *interface_cast(QAccessible::InterfaceType type) override;
     QAccessible::Role role() const override;
     QString     text(QAccessible::Text t) const override;
+    int         childCount() const override;
+    QAccessibleInterface *child(int index) const override;
+    int         indexOfChild(const QAccessibleInterface *child) const override;
+    QAccessibleInterface *focusChild() const override;
 
     // ── QAccessibleTableInterface ───────────────────────────────────
     int  rowCount()    const override;

@@ -2,6 +2,7 @@
 // Thrive Video Suite – Timeline widget implementation
 
 #include "timelinewidget.h"
+#include "accessibletimelineview.h"
 #include "../accessibility/accessibletimeline.h"
 #include "../accessibility/announcer.h"
 #include "../accessibility/audiocuemanager.h"
@@ -14,6 +15,7 @@
 #include <QKeyEvent>
 #include <QAccessible>
 #include <QAccessibleTableInterface>
+#include <QAccessibleEvent>
 
 namespace Thrive {
 
@@ -48,7 +50,13 @@ TimelineWidget::TimelineWidget(Timeline *timeline,
             this, [this](int, int) { refresh(); });
     connect(m_timeline, &Timeline::playheadChanged,
             this, [this](const TimeCode &) { refresh(); });
+    connect(m_timeline, &Timeline::tracksChanged,
+            this, [this]() {
+                connectTrackSignals();
+                refresh();
+            });
 
+    connectTrackSignals();
     updateStatusLabel();
 }
 
@@ -63,6 +71,16 @@ void TimelineWidget::refresh()
             QAccessibleTableModelChangeEvent::ModelReset);
         QAccessible::updateAccessibility(&ev);
     }
+}
+
+void TimelineWidget::notifyCellFocus()
+{
+    if (!m_timeline) return;
+    int row = m_timeline->currentTrackIndex();
+    int col = m_timeline->currentClipIndex();
+    auto *cell = new AccessibleTimelineCell(this, row, col);
+    QAccessibleEvent ev(cell, QAccessible::Focus);
+    QAccessible::updateAccessibility(&ev);
 }
 
 void TimelineWidget::connectTrackSignals()
@@ -116,6 +134,7 @@ void TimelineWidget::keyPressEvent(QKeyEvent *event)
         if (m_timeline->currentTrackIndex() == before && before == 0)
             m_announcer->announce(
                 tr("First track"), Announcer::Priority::Normal);
+        notifyCellFocus();
         emit focusedClipChanged();
         break;
     }
@@ -127,6 +146,7 @@ void TimelineWidget::keyPressEvent(QKeyEvent *event)
             && before == m_timeline->trackCount() - 1)
             m_announcer->announce(
                 tr("Last track"), Announcer::Priority::Normal);
+        notifyCellFocus();
         emit focusedClipChanged();
         break;
     }
@@ -137,6 +157,7 @@ void TimelineWidget::keyPressEvent(QKeyEvent *event)
         if (m_timeline->currentClipIndex() == before && before == 0)
             m_announcer->announce(
                 tr("Beginning of track"), Announcer::Priority::Normal);
+        notifyCellFocus();
         emit focusedClipChanged();
         break;
     }
@@ -149,6 +170,7 @@ void TimelineWidget::keyPressEvent(QKeyEvent *event)
             && trk && before == trk->clipCount() - 1)
             m_announcer->announce(
                 tr("End of track"), Announcer::Priority::Normal);
+        notifyCellFocus();
         emit focusedClipChanged();
         break;
     }
@@ -219,6 +241,7 @@ void TimelineWidget::focusInEvent(QFocusEvent *event)
 {
     QWidget::focusInEvent(event);
     updateStatusLabel();
+    notifyCellFocus();
 
     // Announce current position for screen reader users
     int trackIdx = m_timeline->currentTrackIndex();

@@ -18,9 +18,11 @@ namespace Thrive {
 static QAccessibleInterface *timelineAccessibleFactory(const QString &cn,
                                                        QObject *obj)
 {
-    if (cn == QLatin1String("Thrive::TimelineWidget")) {
-        return new AccessibleTimelineView(
-            qobject_cast<TimelineWidget *>(obj));
+    if (cn == QLatin1String("Thrive::TimelineWidget")
+        || cn == QLatin1String("TimelineWidget")) {
+        auto *w = qobject_cast<TimelineWidget *>(obj);
+        if (w)
+            return new AccessibleTimelineView(w);
     }
     return nullptr;
 }
@@ -56,8 +58,50 @@ QString AccessibleTimelineView::text(QAccessible::Text t) const
     if (t == QAccessible::Name)
         return QObject::tr("Timeline");
     if (t == QAccessible::Description)
-        return QObject::tr("Rows are tracks, columns are clips.");
+        return QObject::tr("Up and down arrow for tracks, left and right arrow for clips.");
     return {};
+}
+
+int AccessibleTimelineView::childCount() const
+{
+    const int r = rowCount();
+    const int c = columnCount();
+    return r * c;
+}
+
+QAccessibleInterface *AccessibleTimelineView::child(int index) const
+{
+    const int cols = columnCount();
+    if (cols <= 0 || index < 0 || index >= childCount())
+        return nullptr;
+    const int row = index / cols;
+    const int col = index % cols;
+    return cellAt(row, col);
+}
+
+QAccessibleInterface *AccessibleTimelineView::focusChild() const
+{
+    auto *tl = timeline();
+    auto *w  = qobject_cast<TimelineWidget *>(object());
+    if (!tl || !w) return nullptr;
+    return new AccessibleTimelineCell(w, tl->currentTrackIndex(),
+                                      tl->currentClipIndex());
+}
+
+int AccessibleTimelineView::indexOfChild(const QAccessibleInterface *iface) const
+{
+    if (!iface)
+        return -1;
+    // Check if it's one of our cells by attempting a table-cell cast
+    auto *cellIface = const_cast<QAccessibleInterface *>(iface);
+    auto *cell = static_cast<QAccessibleTableCellInterface *>(
+        cellIface->interface_cast(QAccessible::TableCellInterface));
+    if (!cell)
+        return -1;
+    const int cols = columnCount();
+    if (cols <= 0)
+        return -1;
+    return cell->rowIndex() * cols + cell->columnIndex();
 }
 
 Timeline *AccessibleTimelineView::timeline() const

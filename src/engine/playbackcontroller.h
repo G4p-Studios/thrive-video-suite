@@ -3,7 +3,9 @@
 
 #pragma once
 
+#include <QImage>
 #include <QObject>
+#include <atomic>
 #include <memory>
 
 namespace Mlt {
@@ -31,10 +33,6 @@ public:
 
     /// Attach the top-level MLT producer (Tractor) that represents the timeline.
     void setProducer(Mlt::Producer *producer);
-
-    /// Set the native window ID for the SDL2 consumer to render into.
-    /// Must be called before open().  Pass 0 for audio-only playback.
-    void setWindowId(quintptr id);
 
     /// Open and start the consumer. Call after setProducer().
     bool open();
@@ -74,10 +72,15 @@ public:
     /// Apply preview scale change to consumer without restart.
     void applyPreviewScale(int width, int height);
 
+    /// Access the frame-processing flag (used by the consumer-frame-show callback).
+    [[nodiscard]] std::atomic<bool> &frameProcessingFlag() { return m_frameProcessing; }
+
 signals:
     void stateChanged(State state);
     void positionChanged(int frame);
     void speedChanged(double speed);
+    /// Emitted on every rendered video frame (from consumer-frame-show).
+    void frameRendered(const QImage &image);
 
 private:
     void refreshConsumer();
@@ -88,12 +91,14 @@ private:
     MltEngine *m_engine = nullptr;
     std::unique_ptr<Mlt::Consumer> m_consumer;
     Mlt::Producer *m_producer = nullptr; // not owned – the Tractor lives in the engine
-    quintptr m_windowId = 0; // native window handle for SDL2 video output
 
     State  m_state = State::Stopped;
     double m_speed = 0.0;
     bool   m_scrubAudio = true;
     QTimer *m_positionTimer = nullptr;
+
+    /// Prevents queued frame callbacks from piling up on the GUI thread.
+    std::atomic<bool> m_frameProcessing{false};
 };
 
 } // namespace Thrive
