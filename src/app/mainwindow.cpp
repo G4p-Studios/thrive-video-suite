@@ -356,8 +356,14 @@ void MainWindow::exportVideo()
     const int aBitrate   = dlg->audioBitrate();
     dlg->deleteLater();
 
-    // Pause playback before rendering
-    m_playback->pause();
+    // Stop playback entirely before rendering – having the sdl2_audio
+    // consumer still running while the avformat render consumer is active
+    // can cause thread-safety issues in MLT.
+    m_playback->close();
+
+    // Freeze the debounce timer so that no tractor-rebuild occurs while
+    // the render engine is cloning / encoding the tractor.
+    m_rebuildTimer->stop();
 
     // Disconnect previous render connections
     disconnect(m_render, &RenderEngine::renderProgress, this, nullptr);
@@ -376,6 +382,9 @@ void MainWindow::exportVideo()
     auto *progress = new ExportProgressDialog(m_render, m_announcer, this);
     progress->exec();
     progress->deleteLater();
+
+    // Re-enable the rebuild timer now that export is done
+    // (it won't fire until something actually calls deferRebuildTractor)
 }
 
 void MainWindow::showPreferences()

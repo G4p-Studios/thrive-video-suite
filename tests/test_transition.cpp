@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Thrive Video Suite – Transition unit tests
 
-#include <QTest>
-#include <QSignalSpy>
+#include <QtTest/QtTest>
 #include "../src/core/transition.h"
 #include "../src/core/timecode.h"
 
@@ -56,10 +55,12 @@ private slots:
                      {},
                      TimeCode(10, 25.0));
 
-        QSignalSpy spy(&t, &Transition::durationChanged);
+        int signalCount = 0;
+        connect(&t, &Transition::durationChanged, this,
+                [&signalCount]() { ++signalCount; });
         t.setDuration(TimeCode(50, 25.0));
 
-        QCOMPARE(spy.count(), 1);
+        QCOMPARE(signalCount, 1);
         QCOMPARE(t.duration().frame(), 50);
     }
 
@@ -68,10 +69,12 @@ private slots:
         Transition t(QStringLiteral("luma"), {}, {},
                      TimeCode(30, 25.0));
 
-        QSignalSpy spy(&t, &Transition::durationChanged);
+        int signalCount = 0;
+        connect(&t, &Transition::durationChanged, this,
+                [&signalCount]() { ++signalCount; });
         t.setDuration(TimeCode(30, 25.0)); // same value
 
-        QCOMPARE(spy.count(), 0);
+        QCOMPARE(signalCount, 0);
     }
 
     void accessibleSummary()

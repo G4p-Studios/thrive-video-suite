@@ -1,22 +1,33 @@
 // SPDX-License-Identifier: MIT
 // Thrive Video Suite – Render engine (export to file)
+//
+// Rendering is done in a **separate process** to isolate the main
+// application from any crash inside MLT / FFmpeg / codec libraries.
+// The subprocess is our own executable invoked with "--render" which
+// writes progress lines to stdout.  This is the same pattern used by
+// Shotcut (spawns melt) and Kdenlive (spawns kdenlive_render).
 
 #pragma once
 
 #include <QObject>
+#include <QProcess>
 #include <QString>
 #include <memory>
 
 namespace Mlt {
 class Consumer;
 class Producer;
+class Profile;
 } // namespace Mlt
 
 namespace Thrive {
 
 class MltEngine;
 
-/// Exports the timeline to a video file at full composition resolution.
+/// Exports the timeline to a video file by spawning a child process.
+/// The child process loads the MLT XML and drives the avformat consumer.
+/// If the child crashes, the main application stays alive and can
+/// report the error.
 class RenderEngine : public QObject
 {
     Q_OBJECT
@@ -26,11 +37,6 @@ public:
     ~RenderEngine() override;
 
     /// Start rendering to the given output file.
-    /// @param producer  The top-level Tractor representing the timeline.
-    /// @param outputPath  Destination file path (e.g. "output.mp4").
-    /// @param format  Container format (e.g. "mp4", "mkv"). Empty = auto-detect.
-    /// @param vcodec  Video codec (e.g. "libx264"). Empty = default.
-    /// @param acodec  Audio codec (e.g. "aac"). Empty = default.
     bool startRender(Mlt::Producer *producer,
                      const QString &outputPath,
                      const QString &format = {},
@@ -43,7 +49,7 @@ public:
     void cancelRender();
 
     [[nodiscard]] bool isRendering() const { return m_rendering; }
-    [[nodiscard]] int  progressPercent() const;
+    [[nodiscard]] int  progressPercent() const { return m_lastPercent; }
 
 signals:
     void renderStarted();
@@ -51,16 +57,17 @@ signals:
     void renderFinished(bool success);
 
 private:
-    void pollProgress();
+    void onProcessReadyRead();
+    void onProcessFinished(int exitCode, QProcess::ExitStatus status);
 
-    MltEngine *m_engine = nullptr;
-    std::unique_ptr<Mlt::Consumer> m_renderConsumer;
-    std::unique_ptr<Mlt::Producer> m_clonedProducer;
-    Mlt::Producer *m_producer = nullptr;
-    QString m_outputPath;
-    QString m_xmlTempPath;
-    bool m_rendering = false;
-    int  m_totalFrames = 0;
+    MltEngine  *m_engine  = nullptr;
+    QProcess   *m_process = nullptr;
+    QString     m_outputPath;
+    QString     m_xmlTempPath;
+    QString     m_renderLogPath;
+    bool        m_rendering    = false;
+    int         m_lastPercent  = 0;
+    bool        m_gotSuccess   = false;
 };
 
 } // namespace Thrive

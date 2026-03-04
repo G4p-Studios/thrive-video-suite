@@ -96,6 +96,119 @@
 			"problemMatcher": [
 				"$msCompile"
 			]
+		},
+		{
+			"label": "Build TVS6",
+			"type": "shell",
+			"command": "cmd.exe /c 'cd /d C:\\Users\\alex\\thrive-video-suite && build.bat'"
+		},
+		{
+			"label": "Test TVS5",
+			"type": "shell",
+			"command": "cmd.exe /c 'cd /d C:\\Users\\alex\\thrive-video-suite && build.bat test'"
+		},
+		{
+			"label": "Build TVS7",
+			"type": "shell",
+			"command": "cmd.exe /c 'cd /d C:\\Users\\alex\\thrive-video-suite && build.bat'"
+		},
+		{
+			"label": "Test TVS6",
+			"type": "shell",
+			"command": "cmd.exe /c 'cd /d C:\\Users\\alex\\thrive-video-suite && build.bat test'"
+		},
+		{
+			"label": "Check melt",
+			"type": "shell",
+			"command": "cmd.exe /c 'if exist C:\\dev\\thrive-deps\\mlt\\bin\\melt.exe (echo MELT_FOUND) else (echo MELT_MISSING) & if exist C:\\dev\\thrive-deps\\mlt\\bin\\melt-7.exe (echo MELT7_FOUND) else (echo MELT7_MISSING) & dir /b C:\\dev\\thrive-deps\\mlt\\bin\\*.exe 2>nul & echo ---DONE---'"
+		},
+		{
+			"label": "Check MLT libs",
+			"type": "shell",
+			"command": "cmd.exe /c 'dir /b C:\\dev\\thrive-deps\\mlt\\bin\\*.dll 2>nul & echo --- & dir /b C:\\Users\\alex\\thrive-video-suite\\build\\lib\\mlt-7\\*.dll 2>nul | find /c \".dll\" & echo ---DONE---'"
+		},
+		{
+			"label": "Build Thrive",
+			"type": "shell",
+			"command": "cmd.exe /c 'cd /d C:\\Users\\alex\\thrive-video-suite && build.bat'"
+		},
+		{
+			"label": "Build Thrive",
+			"type": "shell",
+			"command": "cmd.exe /c \"cd /d C:\\Users\\alex\\thrive-video-suite && build.bat\""
+		},
+		{
+			"label": "Build Thrive",
+			"type": "shell",
+			"command": "cd /d C:\\Users\\alex\\thrive-video-suite && build.bat",
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build Thrive CMD",
+			"type": "shell",
+			"command": "cmd.exe /c \"cd /d C:\\Users\\alex\\thrive-video-suite && build.bat\"",
+			"problemMatcher": [
+				"$msCompile"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build TVS8",
+			"type": "shell",
+			"command": "cmd.exe /c 'cd /d C:\\Users\\alex\\thrive-video-suite && build.bat'"
+		},
+		{
+			"label": "Test TVS7",
+			"type": "shell",
+			"command": "cmd.exe /c 'cd /d C:\\Users\\alex\\thrive-video-suite && build.bat test'"
+		},
+		{
+			"label": "Build TVS9",
+			"type": "shell",
+			"command": "cmd.exe /c 'cd /d C:\\Users\\alex\\thrive-video-suite && build.bat'"
+		},
+		{
+			"label": "Build TVS10",
+			"type": "shell",
+			"command": "cmd.exe /c 'cd /d C:\\Users\\alex\\thrive-video-suite && build.bat'"
+		},
+		{
+			"label": "Build TVS11",
+			"type": "shell",
+			"command": "cmd.exe /c 'cd /d C:\\Users\\alex\\thrive-video-suite && build.bat'"
+		},
+		{
+			"label": "Test TVS8",
+			"type": "shell",
+			"command": "cmd.exe /c 'cd /d C:\\Users\\alex\\thrive-video-suite && build.bat test'"
+		},
+		{
+			"label": "Build TVS12",
+			"type": "shell",
+			"command": "cmd.exe /c 'cd /d C:\\Users\\alex\\thrive-video-suite && build.bat'"
+		},
+		{
+			"label": "Test TVS9",
+			"type": "shell",
+			"command": "cmd.exe /c 'cd /d C:\\Users\\alex\\thrive-video-suite && build.bat test'"
+		},
+		{
+			"label": "Build TVS13",
+			"type": "shell",
+			"command": "cmd.exe /c 'cd /d C:\\Users\\alex\\thrive-video-suite && build.bat'"
+		},
+		{
+			"label": "Test TVS10",
+			"type": "shell",
+			"command": "cmd.exe /c 'cd /d C:\\Users\\alex\\thrive-video-suite && build.bat test'"
+		},
+		{
+			"label": "Test TVS11",
+			"type": "shell",
+			"command": "cmd.exe /c 'cd /d C:\\Users\\alex\\thrive-video-suite && build.bat test'"
 		}
 	]
 }

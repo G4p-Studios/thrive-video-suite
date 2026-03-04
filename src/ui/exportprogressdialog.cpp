@@ -11,6 +11,8 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 #include <QAccessible>
+#include <QCoreApplication>
+#include <QDir>
 
 namespace Thrive {
 
@@ -86,11 +88,19 @@ void ExportProgressDialog::onFinished(bool success)
                               Announcer::Priority::High);
         accept();
     } else {
-        // Render was cancelled or failed – dialog may already be closed
-        // from cancel button; only show error if still visible
+        // Render was cancelled or failed
         if (isVisible()) {
-            m_announcer->announce(tr("Export failed."),
-                                  Announcer::Priority::High);
+            const QString logPath = QDir(QCoreApplication::applicationDirPath())
+                                        .filePath(QStringLiteral("render_log.txt"));
+            m_announcer->announce(
+                tr("Export failed. Render log saved to: %1").arg(logPath),
+                Announcer::Priority::High);
+            QMessageBox::warning(
+                this, tr("Export Failed"),
+                tr("The export did not complete successfully.\n\n"
+                   "A detailed render log has been saved to:\n%1\n\n"
+                   "Please share this file for debugging.")
+                    .arg(logPath));
             reject();
         }
     }
