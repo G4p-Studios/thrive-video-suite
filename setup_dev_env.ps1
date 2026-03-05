@@ -369,20 +369,29 @@ if ((Test-Path $mltPkgCfg) -and (Test-Path $mltMsvcStamp)) {
             }
         }
 
-        # Copy ALL remaining DLLs from Shotcut root (FFmpeg, SDL2, etc.)
+        # Copy remaining runtime DLLs from Shotcut root (FFmpeg, SDL2, etc.)
         # MLT plugin modules (especially libmltavformat and libmltsdl2) need
         # these at runtime to decode/encode media and play audio. Without them
         # playback and export will crash or silently fail.
+        #
+        # IMPORTANT: Skip Qt6 DLLs — Shotcut bundles its own Qt version
+        # which would overwrite the user's Qt and cause ABI mismatch crashes.
         Write-Host "  Copying runtime dependency DLLs (FFmpeg, SDL2, etc.)..."
         $extraCount = 0
+        $skipCount = 0
         foreach ($shotcutDll in (Get-ChildItem $shotcutRoot -Filter "*.dll" -ErrorAction SilentlyContinue)) {
+            # Skip Qt DLLs — these come from the user's own Qt installation
+            if ($shotcutDll.Name -match '^Qt[56]' -or $shotcutDll.Name -match '^d3d' -or $shotcutDll.Name -match '^opengl32') {
+                $skipCount++
+                continue
+            }
             $destPath = Join-Path $mltBinDir2 $shotcutDll.Name
             if (-not (Test-Path $destPath)) {
                 Copy-Item $shotcutDll.FullName $destPath -Force
                 $extraCount++
             }
         }
-        Write-Host "    Copied $extraCount additional runtime DLLs" -ForegroundColor DarkGray
+        Write-Host "    Copied $extraCount additional runtime DLLs (skipped $skipCount Qt/system DLLs)" -ForegroundColor DarkGray
 
         # Also copy MLT plugins directory if present
         foreach ($pluginDir in @("lib\mlt-7", "lib\mlt", "share\mlt-7\lib")) {

@@ -301,11 +301,17 @@ REM ====================================================================
 REM  Deploy runtime DLLs next to the executable
 REM ====================================================================
 if exist "%BUILD_DIR%\thrive-video-suite.exe" (
+    REM Clean up stale DLLs from older builds (e.g. when QuaZip switched
+    REM from shared to static).  Ninja does not remove old build artifacts.
+    del /q "%BUILD_DIR%\quazip1-qt6.dll" >nul 2>&1
+
     if exist "%QT_DIR%\bin\windeployqt.exe" (
         "%QT_DIR%\bin\windeployqt.exe" --no-translations --no-system-d3d-compiler --no-opengl-sw "%BUILD_DIR%\thrive-video-suite.exe" >nul 2>&1
     )
     REM Copy ALL DLLs from mlt\bin (includes libmlt-7, libmlt++-7,
-    REM and MinGW runtime DLLs like libwinpthread-1, libgcc_s_seh-1, libdl)
+    REM MinGW runtime DLLs, FFmpeg, SDL2, and other media codec libs).
+    REM Qt6 DLLs are excluded at setup time (setup_dev_env.ps1) to avoid
+    REM overwriting the user's correct Qt version with Shotcut's version.
     for %%F in ("%MLT_DIR%\bin\*.dll") do copy /y "%%F" "%BUILD_DIR%\" >nul 2>&1
     REM Copy all vcpkg DLLs to build output
     for %%F in ("%VCPKG_INSTALLED%\bin\*.dll") do copy /y "%%F" "%BUILD_DIR%\" >nul 2>&1

@@ -60,11 +60,23 @@ FetchContent_MakeAvailable(prism)
 # QuaZip – ZIP I/O for .tvs project files
 # ---------------------------------------------------------------------------
 set(QUAZIP_QT_MAJOR_VERSION 6 CACHE STRING "" FORCE)
+set(QUAZIP_INSTALL OFF CACHE BOOL "" FORCE)
+
+# Build QuaZip as a STATIC library.  This avoids deploying a separate
+# quazip1-qt6.dll and — critically — makes its Qt6::Core5Compat
+# dependency a direct import of the exe so windeployqt can detect and
+# deploy Qt6Core5Compat.dll automatically.
+set(BUILD_SHARED_LIBS_SAVED ${BUILD_SHARED_LIBS})
+set(BUILD_SHARED_LIBS OFF)
+
 FetchContent_Declare(quazip
     GIT_REPOSITORY https://github.com/stachenov/quazip.git
     GIT_TAG        v1.5
 )
 FetchContent_MakeAvailable(quazip)
+
+# Restore the original BUILD_SHARED_LIBS value
+set(BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS_SAVED})
 
 # ---------------------------------------------------------------------------
 # Sub-projects (order matters for dependency resolution)
