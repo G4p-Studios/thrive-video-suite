@@ -369,6 +369,21 @@ if ((Test-Path $mltPkgCfg) -and (Test-Path $mltMsvcStamp)) {
             }
         }
 
+        # Copy ALL remaining DLLs from Shotcut root (FFmpeg, SDL2, etc.)
+        # MLT plugin modules (especially libmltavformat and libmltsdl2) need
+        # these at runtime to decode/encode media and play audio. Without them
+        # playback and export will crash or silently fail.
+        Write-Host "  Copying runtime dependency DLLs (FFmpeg, SDL2, etc.)..."
+        $extraCount = 0
+        foreach ($shotcutDll in (Get-ChildItem $shotcutRoot -Filter "*.dll" -ErrorAction SilentlyContinue)) {
+            $destPath = Join-Path $mltBinDir2 $shotcutDll.Name
+            if (-not (Test-Path $destPath)) {
+                Copy-Item $shotcutDll.FullName $destPath -Force
+                $extraCount++
+            }
+        }
+        Write-Host "    Copied $extraCount additional runtime DLLs" -ForegroundColor DarkGray
+
         # Also copy MLT plugins directory if present
         foreach ($pluginDir in @("lib\mlt-7", "lib\mlt", "share\mlt-7\lib")) {
             $srcPlugins = Join-Path $shotcutRoot $pluginDir

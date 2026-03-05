@@ -334,12 +334,28 @@ if exist "%BUILD_DIR%\thrive-video-suite.exe" (
         xcopy /E /I /Y "%MLT_DIR%\share\mlt-7" "%BUILD_DIR%\share\mlt-7" >nul 2>&1
     )
 
-    REM Deploy FFmpeg master DLLs (avcodec-62 etc.) required by libmltavformat
+    REM Deploy FFmpeg DLLs required by libmltavformat.
+    REM Primary source: Shotcut bundles matching FFmpeg DLLs in mlt\bin,
+    REM which were already copied above.  Optional override: a local
+    REM FFmpeg-master build at the path below (for development).
     set "FFMPEG_BIN=C:\dev\thrive-deps\ffmpeg-master\ffmpeg-master-latest-win64-lgpl-shared\bin"
     if exist "%FFMPEG_BIN%\avcodec-62.dll" (
+        echo       Overriding FFmpeg with local ffmpeg-master build...
         for %%F in (avcodec-62 avdevice-62 avfilter-11 avformat-62 avutil-60 swresample-6 swscale-9) do (
             copy /y "%FFMPEG_BIN%\%%F.dll" "%BUILD_DIR%\" >nul 2>&1
         )
+    )
+
+    REM Verify that at least one FFmpeg avformat DLL landed in the build dir.
+    REM Without FFmpeg, MLT cannot decode or encode any media files.
+    set "HAS_FFMPEG=0"
+    for %%F in ("%BUILD_DIR%\avformat*.dll") do set "HAS_FFMPEG=1"
+    if "!HAS_FFMPEG!"=="0" (
+        echo.
+        echo   WARNING: No FFmpeg DLLs found in the build directory!
+        echo   Playback and export will not work without FFmpeg.
+        echo   Fix: delete C:\dev\thrive-deps\mlt and re-run "build setup"
+        echo.
     )
 )
 
