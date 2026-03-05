@@ -174,6 +174,10 @@ if not exist "%MLT_STAMP%" set "NEED_MLT=1"
 if not exist "%MLT_DIR%\bin\libdl.dll" set "NEED_MLT=1"
 if not exist "%MLT_DIR%\bin\libwinpthread-1.dll" set "NEED_MLT=1"
 if not exist "%MLT_DIR%\bin\libgcc_s_seh-1.dll" set "NEED_MLT=1"
+REM FFmpeg DLLs — without these MLT cannot decode or play any media
+if not exist "%MLT_DIR%\bin\avformat-62.dll" if not exist "%MLT_DIR%\bin\avformat-61.dll" set "NEED_MLT=1"
+REM MLT module plugins directory
+if not exist "%MLT_DIR%\lib\mlt-7\libmltcore.dll" set "NEED_MLT=1"
 
 REM If runtime DLLs are missing, delete the stamp so setup re-runs fully
 if "!NEED_MLT!"=="1" (
@@ -305,62 +309,113 @@ if exist "%BUILD_DIR%\thrive-video-suite.exe" (
     REM from shared to static).  Ninja does not remove old build artifacts.
     del /q "%BUILD_DIR%\quazip1-qt6.dll" >nul 2>&1
 
+    REM ── 1. Qt DLLs via windeployqt ──────────────────────────────────
     if exist "%QT_DIR%\bin\windeployqt.exe" (
         "%QT_DIR%\bin\windeployqt.exe" --no-translations --no-system-d3d-compiler --no-opengl-sw "%BUILD_DIR%\thrive-video-suite.exe" >nul 2>&1
     )
-    REM Copy ALL DLLs from mlt\bin (includes libmlt-7, libmlt++-7,
-    REM MinGW runtime DLLs, FFmpeg, SDL2, and other media codec libs).
-    REM Qt6 DLLs are excluded at setup time (setup_dev_env.ps1) to avoid
-    REM overwriting the user's correct Qt version with Shotcut's version.
+
+    REM ── 2. MLT + Shotcut runtime DLLs ──────────────────────────────
+    REM Copy ALL DLLs from mlt\bin. This includes libmlt, MinGW runtimes,
+    REM FFmpeg, and all other media codec DLLs extracted from Shotcut.
+    REM Qt6 DLLs are filtered out at setup time (setup_dev_env.ps1).
     for %%F in ("%MLT_DIR%\bin\*.dll") do copy /y "%%F" "%BUILD_DIR%\" >nul 2>&1
-    REM Copy all vcpkg DLLs to build output
+
+    REM ── 3. vcpkg DLLs (SDL2, zlib, pthreads, dlfcn, fftw3, libxml2) ─
+    REM These overwrite any Shotcut versions with MSVC-built equivalents
+    REM where the filenames match (e.g. SDL2.dll, zlib1.dll).
     for %%F in ("%VCPKG_INSTALLED%\bin\*.dll") do copy /y "%%F" "%BUILD_DIR%\" >nul 2>&1
 
-    REM Deploy MLT module plugins (avformat, sdl2, etc.) — without these
-    REM MLT cannot decode media files or play audio
+    REM ── 4. MLT module plugins (lib/mlt-7/) ─────────────────────────
+    REM Without these MLT cannot decode media files or play audio.
     if exist "%MLT_DIR%\lib\mlt-7" (
         xcopy /E /I /Y "%MLT_DIR%\lib\mlt-7" "%BUILD_DIR%\lib\mlt-7" >nul 2>&1
         REM Remove modules compiled against incompatible libraries.
-        REM  - glaxnimate-qt6/qt6: built against different Qt version
-        REM  - movit: requires OpenGL extensions not always present
-        REM  - decklink, jackrack, opencv, frei0r, ladspa, sox,
-        REM    spatialaudio, vidstab, rubberband, xine, oldfilm:
-        REM    have external deps not bundled with us
         for %%M in (glaxnimate-qt6 qt6 movit decklink jackrack opencv frei0r ladspa sox spatialaudio vidstab rubberband xine oldfilm kdenlive rtaudio) do (
             del /q "%BUILD_DIR%\lib\mlt-7\libmlt%%M.dll" >nul 2>&1
         )
-        REM Copy MinGW runtime DLLs into module dir so they can find deps
+        REM Copy runtime DLLs into the module directory so Windows can
+        REM resolve them when MLT dlopen()s a module.  Modules need:
+        REM   - MinGW runtime (libgcc, libwinpthread, libstdc++)
+        REM   - libmlt-7.dll (the framework itself)
+        REM   - libmlt++-7.dll (C++ wrapper)
         copy /y "%MLT_DIR%\bin\libgcc_s_seh-1.dll" "%BUILD_DIR%\lib\mlt-7\" >nul 2>&1
         copy /y "%MLT_DIR%\bin\libwinpthread-1.dll" "%BUILD_DIR%\lib\mlt-7\" >nul 2>&1
+        copy /y "%MLT_DIR%\bin\libstdc++-6.dll" "%BUILD_DIR%\lib\mlt-7\" >nul 2>&1
         copy /y "%MLT_DIR%\bin\libmlt-7.dll" "%BUILD_DIR%\lib\mlt-7\" >nul 2>&1
         copy /y "%MLT_DIR%\bin\libmlt++-7.dll" "%BUILD_DIR%\lib\mlt-7\" >nul 2>&1
     )
-    REM Deploy MLT data files (profiles, service metadata)
+
+    REM ── 5. MLT data files (profiles, service metadata) ─────────────
     if exist "%MLT_DIR%\share\mlt-7" (
         xcopy /E /I /Y "%MLT_DIR%\share\mlt-7" "%BUILD_DIR%\share\mlt-7" >nul 2>&1
     )
 
-    REM Deploy FFmpeg DLLs required by libmltavformat.
-    REM Primary source: Shotcut bundles matching FFmpeg DLLs in mlt\bin,
-    REM which were already copied above.  Optional override: a local
-    REM FFmpeg-master build at the path below (for development).
+    REM ── 6. Optional FFmpeg override for development ────────────────
     set "FFMPEG_BIN=C:\dev\thrive-deps\ffmpeg-master\ffmpeg-master-latest-win64-lgpl-shared\bin"
-    if exist "%FFMPEG_BIN%\avcodec-62.dll" (
+    if exist "!FFMPEG_BIN!\avcodec-62.dll" (
         echo       Overriding FFmpeg with local ffmpeg-master build...
         for %%F in (avcodec-62 avdevice-62 avfilter-11 avformat-62 avutil-60 swresample-6 swscale-9) do (
-            copy /y "%FFMPEG_BIN%\%%F.dll" "%BUILD_DIR%\" >nul 2>&1
+            copy /y "!FFMPEG_BIN!\%%F.dll" "%BUILD_DIR%\" >nul 2>&1
         )
     )
 
-    REM Verify that at least one FFmpeg avformat DLL landed in the build dir.
-    REM Without FFmpeg, MLT cannot decode or encode any media files.
+    REM ── 7. Verify all critical runtime DLLs ────────────────────────
+    set "DEPLOY_OK=1"
+    set "MISSING="
+
+    REM Check FFmpeg (at least one avformat DLL)
     set "HAS_FFMPEG=0"
     for %%F in ("%BUILD_DIR%\avformat*.dll") do set "HAS_FFMPEG=1"
     if "!HAS_FFMPEG!"=="0" (
+        set "DEPLOY_OK=0"
+        set "MISSING=!MISSING! avformat"
+    )
+
+    REM Check MLT core
+    for %%D in (libmlt-7.dll libmlt++-7.dll) do (
+        if not exist "%BUILD_DIR%\%%D" (
+            set "DEPLOY_OK=0"
+            set "MISSING=!MISSING! %%D"
+        )
+    )
+
+    REM Check MinGW runtimes
+    for %%D in (libgcc_s_seh-1.dll libwinpthread-1.dll) do (
+        if not exist "%BUILD_DIR%\%%D" (
+            set "DEPLOY_OK=0"
+            set "MISSING=!MISSING! %%D"
+        )
+    )
+
+    REM Check MLT modules
+    if not exist "%BUILD_DIR%\lib\mlt-7\libmltcore.dll" (
+        set "DEPLOY_OK=0"
+        set "MISSING=!MISSING! lib/mlt-7/libmltcore.dll"
+    )
+    if not exist "%BUILD_DIR%\lib\mlt-7\libmltavformat.dll" (
+        set "DEPLOY_OK=0"
+        set "MISSING=!MISSING! lib/mlt-7/libmltavformat.dll"
+    )
+    if not exist "%BUILD_DIR%\lib\mlt-7\libmltsdl2.dll" (
+        set "DEPLOY_OK=0"
+        set "MISSING=!MISSING! lib/mlt-7/libmltsdl2.dll"
+    )
+
+    REM Check Qt
+    if not exist "%BUILD_DIR%\Qt6Core.dll" (
+        set "DEPLOY_OK=0"
+        set "MISSING=!MISSING! Qt6Core.dll"
+    )
+    if not exist "%BUILD_DIR%\Qt6Core5Compat.dll" (
+        set "DEPLOY_OK=0"
+        set "MISSING=!MISSING! Qt6Core5Compat.dll"
+    )
+
+    if "!DEPLOY_OK!"=="0" (
         echo.
-        echo   WARNING: No FFmpeg DLLs found in the build directory!
-        echo   Playback and export will not work without FFmpeg.
-        echo   Fix: delete C:\dev\thrive-deps\mlt and re-run "build setup"
+        echo   WARNING: Missing critical runtime DLLs:!MISSING!
+        echo   The application may crash or fail to play media.
+        echo   Fix: delete C:\dev\thrive-deps\mlt and re-run "build"
         echo.
     )
 )

@@ -376,44 +376,49 @@ if ((Test-Path $mltPkgCfg) -and (Test-Path $mltMsvcStamp)) {
         #
         # IMPORTANT: Skip Qt6 DLLs — Shotcut bundles its own Qt version
         # which would overwrite the user's Qt and cause ABI mismatch crashes.
+        # Also skip Python, OpenGL SW renderer, and other Shotcut-specific DLLs.
         Write-Host "  Copying runtime dependency DLLs (FFmpeg, SDL2, etc.)..."
         $extraCount = 0
         $skipCount = 0
         foreach ($shotcutDll in (Get-ChildItem $shotcutRoot -Filter "*.dll" -ErrorAction SilentlyContinue)) {
-            # Skip Qt DLLs — these come from the user's own Qt installation
-            if ($shotcutDll.Name -match '^Qt[56]' -or $shotcutDll.Name -match '^d3d' -or $shotcutDll.Name -match '^opengl32') {
+            # Skip DLLs that belong to Qt or are Shotcut-specific
+            if ($shotcutDll.Name -match '^Qt[56]' -or
+                $shotcutDll.Name -match '^d3d' -or
+                $shotcutDll.Name -match '^opengl32' -or
+                $shotcutDll.Name -match '^python' -or
+                $shotcutDll.Name -match '^libpython' -or
+                $shotcutDll.Name -match '^libCuteLogger' -or
+                $shotcutDll.Name -match '^libQtColorWidgets') {
                 $skipCount++
                 continue
             }
             $destPath = Join-Path $mltBinDir2 $shotcutDll.Name
-            if (-not (Test-Path $destPath)) {
-                Copy-Item $shotcutDll.FullName $destPath -Force
-                $extraCount++
-            }
+            Copy-Item $shotcutDll.FullName $destPath -Force
+            $extraCount++
         }
-        Write-Host "    Copied $extraCount additional runtime DLLs (skipped $skipCount Qt/system DLLs)" -ForegroundColor DarkGray
+        Write-Host "    Copied $extraCount runtime DLLs (skipped $skipCount Qt/app-specific DLLs)" -ForegroundColor DarkGray
 
-        # Also copy MLT plugins directory if present
+        # Always (re-)copy MLT plugin modules directory
         foreach ($pluginDir in @("lib\mlt-7", "lib\mlt", "share\mlt-7\lib")) {
             $srcPlugins = Join-Path $shotcutRoot $pluginDir
             if (Test-Path $srcPlugins) {
                 $destPlugins = Join-Path (Join-Path $MltInstDir "lib") "mlt-7"
-                if (-not (Test-Path $destPlugins)) {
-                    Copy-Item $srcPlugins $destPlugins -Recurse -Force
-                }
+                Write-Host "  Copying MLT plugin modules..."
+                if (Test-Path $destPlugins) { Remove-Item $destPlugins -Recurse -Force }
+                Copy-Item $srcPlugins $destPlugins -Recurse -Force
                 break
             }
         }
 
-        # Copy share/mlt-7 (profiles, presets) if present
+        # Always (re-)copy MLT data files (profiles, presets)
         foreach ($shareDir in @("share\mlt-7", "share\mlt")) {
             $srcShare = Join-Path $shotcutRoot $shareDir
             if (Test-Path $srcShare) {
                 $destShare = Join-Path (Join-Path $MltInstDir "share") "mlt-7"
-                if (-not (Test-Path $destShare)) {
-                    New-Item (Join-Path $MltInstDir "share") -ItemType Directory -Force | Out-Null
-                    Copy-Item $srcShare $destShare -Recurse -Force
-                }
+                Write-Host "  Copying MLT data files..."
+                New-Item (Join-Path $MltInstDir "share") -ItemType Directory -Force | Out-Null
+                if (Test-Path $destShare) { Remove-Item $destShare -Recurse -Force }
+                Copy-Item $srcShare $destShare -Recurse -Force
                 break
             }
         }
