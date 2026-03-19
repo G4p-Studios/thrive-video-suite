@@ -1262,6 +1262,12 @@ void MainWindow::createDockWidgets()
         tr("Effects browser. Browse and apply audio and video effects."));
     tabifyDockWidget(propDock, effectsDock);
 
+    // Keep effects browser out of tab order when its dock tab is hidden
+    connect(effectsDock, &QDockWidget::visibilityChanged,
+            m_effects, &EffectsBrowser::setTabOrderParticipation);
+    // Start with effects hidden (properties tab is on top after tabify)
+    m_effects->setTabOrderParticipation(false);
+
     // Wire timeline selection → properties
     connect(m_timeline, &TimelineWidget::focusedClipChanged,
             this, [this]() {

@@ -57,6 +57,21 @@ EffectsBrowser::EffectsBrowser(EffectCatalog *catalog,
     populateList();
 }
 
+void EffectsBrowser::setTabOrderParticipation(bool enabled)
+{
+    const auto policy = enabled ? Qt::StrongFocus : Qt::NoFocus;
+    m_searchField->setFocusPolicy(enabled ? Qt::StrongFocus : Qt::NoFocus);
+    m_list->setFocusPolicy(policy);
+    m_description->setFocusPolicy(Qt::NoFocus); // label never needs focus
+
+    if (!enabled) {
+        // Remove focus from any child that currently holds it
+        QWidget *fw = focusWidget();
+        if (fw && (fw == m_searchField || fw == m_list || fw == m_description))
+            fw->clearFocus();
+    }
+}
+
 void EffectsBrowser::populateList(const QString &filter)
 {
     m_list->clear();

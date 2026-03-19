@@ -29,6 +29,12 @@ public:
                             Announcer *announcer,
                             QWidget *parent = nullptr);
 
+public slots:
+    /// Enable or disable participation in the tab order.
+    /// When \a enabled is false, all child widgets lose focus so that
+    /// screen readers (NVDA) cannot tab into a hidden dock tab.
+    void setTabOrderParticipation(bool enabled);
+
 signals:
     /// User chose to apply the effect identified by \a serviceId.
     void effectChosen(const QString &serviceId);
