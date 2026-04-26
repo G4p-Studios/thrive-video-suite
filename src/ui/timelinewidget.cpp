@@ -41,7 +41,7 @@ TimelineWidget::TimelineWidget(Timeline *timeline,
     setAccessibleName(tr("Timeline"));
     setAccessibleDescription(
         tr("Use Up/Down arrows to navigate tracks, "
-           "Left/Right arrows to navigate clips."));
+           "Left/Right arrows to navigate clips, and Page Up/Page Down to jump five clips."));
     setFocusPolicy(Qt::StrongFocus);
 
     m_statusLabel->setWordWrap(true);
@@ -208,6 +208,52 @@ void TimelineWidget::keyPressEvent(QKeyEvent *event)
         break;
     }
 
+    case Qt::Key_PageUp: {
+        auto *trk = m_timeline->trackAt(m_timeline->currentTrackIndex());
+        if (!trk || trk->clipCount() == 0) {
+            m_announcer->announce(tr("No clips on this track."),
+                                  Announcer::Priority::Normal);
+            break;
+        }
+        const int oldIndex = m_timeline->currentClipIndex();
+        const int newIndex = qMax(0, oldIndex - 5);
+        m_timeline->setCurrentClipIndex(newIndex);
+        if (newIndex == oldIndex) {
+            m_announcer->announce(tr("Already near the beginning of track."),
+                                  Announcer::Priority::Normal);
+        } else {
+            m_announcer->announce(
+                tr("Clip %1 of %2.").arg(newIndex + 1).arg(trk->clipCount()),
+                Announcer::Priority::Normal);
+        }
+        notifyCellFocus();
+        emit focusedClipChanged();
+        break;
+    }
+
+    case Qt::Key_PageDown: {
+        auto *trk = m_timeline->trackAt(m_timeline->currentTrackIndex());
+        if (!trk || trk->clipCount() == 0) {
+            m_announcer->announce(tr("No clips on this track."),
+                                  Announcer::Priority::Normal);
+            break;
+        }
+        const int oldIndex = m_timeline->currentClipIndex();
+        const int newIndex = qMin(trk->clipCount() - 1, oldIndex + 5);
+        m_timeline->setCurrentClipIndex(newIndex);
+        if (newIndex == oldIndex) {
+            m_announcer->announce(tr("Already near the end of track."),
+                                  Announcer::Priority::Normal);
+        } else {
+            m_announcer->announce(
+                tr("Clip %1 of %2.").arg(newIndex + 1).arg(trk->clipCount()),
+                Announcer::Priority::Normal);
+        }
+        notifyCellFocus();
+        emit focusedClipChanged();
+        break;
+    }
+
     case Qt::Key_M: {
         auto posBefore = m_timeline->playheadPosition();
         m_timeline->navigateNextMarker();
@@ -284,6 +330,9 @@ void TimelineWidget::focusInEvent(QFocusEvent *event)
                               .arg(trackIdx + 1)
                               .arg(m_timeline->trackCount())
                               .arg(trk->name());
+        summary += QLatin1Char(' ')
+                   + tr("Playhead %1.")
+                         .arg(m_timeline->playheadPosition().toSpokenString());
         int clipIdx = m_timeline->currentClipIndex();
         if (clipIdx >= 0 && clipIdx < trk->clipCount()) {
             summary += QLatin1Char(' ')
@@ -294,6 +343,8 @@ void TimelineWidget::focusInEvent(QFocusEvent *event)
         } else {
             summary += QLatin1Char(' ') + tr("No clips.");
         }
+        summary += QLatin1Char(' ')
+                   + tr("Use Page Up and Page Down to jump five clips.");
         m_announcer->announce(summary, Announcer::Priority::Normal);
     }
 }

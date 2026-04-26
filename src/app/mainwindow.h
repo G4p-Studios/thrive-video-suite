@@ -58,6 +58,8 @@ private:
     void createMenus();
     void createDockWidgets();
     void registerShortcuts();
+    [[nodiscard]] int probeMediaLengthFrames(const QString &filePath,
+                                             int fallbackFrames) const;
     void checkFirstRun();
     void checkPostRestartPlugins();
     void checkAutoSaveRecovery();
@@ -140,6 +142,9 @@ private:
     QAction *m_actFocusMedia       = nullptr;
     QAction *m_actFocusEffects     = nullptr;
     QAction *m_actFocusProperties  = nullptr;
+    QAction *m_actFocusTimeline    = nullptr;
+    QAction *m_actFocusTransport   = nullptr;
+    QAction *m_actAnnounceContext  = nullptr;
 
     // Clip nudge
     QAction *m_actNudgeClipLeft    = nullptr;

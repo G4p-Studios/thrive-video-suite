@@ -989,6 +989,62 @@ void MainWindow::createActions()
                               Announcer::Priority::Normal);
     });
 
+    m_actFocusTimeline = new QAction(tr("Focus &Timeline"), this);
+    connect(m_actFocusTimeline, &QAction::triggered, this, [this]() {
+        m_timeline->setFocus();
+        m_announcer->announce(tr("Timeline"),
+                              Announcer::Priority::Normal);
+    });
+
+    m_actFocusTransport = new QAction(tr("Focus T&ransport"), this);
+    connect(m_actFocusTransport, &QAction::triggered, this, [this]() {
+        m_transport->setFocus();
+        m_announcer->announce(tr("Transport"),
+                              Announcer::Priority::Normal);
+    });
+
+    m_actAnnounceContext = new QAction(tr("Announce Current Conte&xt"), this);
+    connect(m_actAnnounceContext, &QAction::triggered, this, [this]() {
+        auto *tl = m_project->timeline();
+        auto *trk = tl ? tl->trackAt(tl->currentTrackIndex()) : nullptr;
+
+        QString focusName;
+        if (auto *fw = QApplication::focusWidget()) {
+            focusName = fw->accessibleName();
+            if (focusName.isEmpty())
+                focusName = fw->windowTitle();
+            if (focusName.isEmpty())
+                focusName = fw->objectName();
+        }
+        if (focusName.isEmpty())
+            focusName = tr("Unknown focus");
+
+        QString message = tr("Focus: %1.").arg(focusName);
+        if (tl) {
+            message += QLatin1Char(' ')
+                       + tr("Playhead %1.")
+                             .arg(tl->playheadPosition().toSpokenString());
+        }
+        if (trk) {
+            message += QLatin1Char(' ')
+                       + tr("Track %1 of %2: %3.")
+                             .arg(tl->currentTrackIndex() + 1)
+                             .arg(tl->trackCount())
+                             .arg(trk->name());
+
+            const int clipIdx = tl->currentClipIndex();
+            if (clipIdx >= 0 && clipIdx < trk->clipCount()) {
+                message += QLatin1Char(' ')
+                           + tr("Clip %1 of %2: %3.")
+                                 .arg(clipIdx + 1)
+                                 .arg(trk->clipCount())
+                                 .arg(trk->clipAt(clipIdx)->name());
+            }
+        }
+
+        m_announcer->announce(message, Announcer::Priority::High);
+    });
+
     // ── Move track up / down ──────────────────────────────────────────
     m_actMoveTrackUp = new QAction(tr("Move Track &Up"), this);
     connect(m_actMoveTrackUp, &QAction::triggered, this, [this]() {
@@ -1184,9 +1240,14 @@ void MainWindow::createMenus()
     transportMenu->addAction(m_actGoToTimecode);
 
     auto *viewMenu = menuBar()->addMenu(tr("&View"));
+    viewMenu->addAction(m_actFocusTimeline);
+    viewMenu->addAction(m_actFocusTransport);
+    viewMenu->addSeparator();
     viewMenu->addAction(m_actFocusMedia);
     viewMenu->addAction(m_actFocusEffects);
     viewMenu->addAction(m_actFocusProperties);
+    viewMenu->addSeparator();
+    viewMenu->addAction(m_actAnnounceContext);
 
     auto *helpMenu = menuBar()->addMenu(tr("&Help"));
     helpMenu->addAction(m_actWizard);
@@ -1311,31 +1372,11 @@ void MainWindow::createDockWidgets()
                 // If probing fails we still add the clip with a fallback
                 // duration so the timeline is never silently empty.
                 const double fps = m_project->fps();
-                int length = 0;
-
-                auto *profile = m_engine ? m_engine->compositionProfile()
-                                         : nullptr;
-                if (profile) {
-                    const QByteArray pathUtf8 = filePath.toUtf8();
-                    Mlt::Producer probe(*profile, pathUtf8.constData());
-                    if (!probe.is_valid()) {
-                        // Bare path often fails on Windows; retry with
-                        // the explicit avformat: service prefix.
-                        const QByteArray avfPath = "avformat:" + pathUtf8;
-                        Mlt::Producer probe2(*profile, avfPath.constData());
-                        if (probe2.is_valid())
-                            length = probe2.get_length();
-                    } else {
-                        length = probe.get_length();
-                    }
-                }
+                int length = probeMediaLengthFrames(
+                    filePath, static_cast<int>(fps * 5.0));
 
                 qDebug() << "Media import: probed length =" << length
                          << "frames for" << filePath;
-
-                // Fallback: 5 seconds if probe returned nothing usable
-                if (length <= 0)
-                    length = static_cast<int>(fps * 5);
 
                 TimeCode inPt(0, fps);
                 TimeCode outPt(length > 0 ? length - 1 : 0, fps);
@@ -1413,6 +1454,30 @@ void MainWindow::createDockWidgets()
             });
 }
 
+int MainWindow::probeMediaLengthFrames(const QString &filePath,
+                                       int fallbackFrames) const
+{
+    if (filePath.isEmpty())
+        return fallbackFrames;
+
+    int length = 0;
+    auto *profile = m_engine ? m_engine->compositionProfile() : nullptr;
+    if (profile) {
+        const QByteArray pathUtf8 = filePath.toUtf8();
+        Mlt::Producer probe(*profile, pathUtf8.constData());
+        if (!probe.is_valid()) {
+            const QByteArray avfPath = "avformat:" + pathUtf8;
+            Mlt::Producer probe2(*profile, avfPath.constData());
+            if (probe2.is_valid())
+                length = probe2.get_length();
+        } else {
+            length = probe.get_length();
+        }
+    }
+
+    return length > 0 ? length : fallbackFrames;
+}
+
 void MainWindow::registerShortcuts()
 {
     auto &sm = ShortcutManager::instance();
@@ -1471,12 +1536,19 @@ void MainWindow::registerShortcuts()
                       QKeySequence(QStringLiteral("Ctrl+Shift+L")));
 
     // View / focus panel shortcuts
+    sm.registerAction(QStringLiteral("view.focusTimeline"), m_actFocusTimeline,
+                      QKeySequence(QStringLiteral("Ctrl+1")));
+    sm.registerAction(QStringLiteral("view.focusTransport"), m_actFocusTransport,
+                      QKeySequence(QStringLiteral("Ctrl+2")));
     sm.registerAction(QStringLiteral("view.focusMedia"), m_actFocusMedia,
-                      QKeySequence(QStringLiteral("Ctrl+I")));
+                      QKeySequence(QStringLiteral("Ctrl+3")));
     sm.registerAction(QStringLiteral("view.focusEffects"), m_actFocusEffects,
-                      QKeySequence(QStringLiteral("Ctrl+E")));
+                      QKeySequence(QStringLiteral("Ctrl+4")));
     sm.registerAction(QStringLiteral("view.focusProperties"), m_actFocusProperties,
-                      QKeySequence(QStringLiteral("Ctrl+P")));
+                      QKeySequence(QStringLiteral("Ctrl+5")));
+    sm.registerAction(QStringLiteral("view.announceContext"),
+                      m_actAnnounceContext,
+                      QKeySequence(QStringLiteral("Ctrl+Shift+W")));
 
     // Track reorder
     sm.registerAction(QStringLiteral("timeline.moveTrackUp"), m_actMoveTrackUp,
