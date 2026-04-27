@@ -37,6 +37,7 @@ signals:
     void audioCueVolumeChanged(float volume);
     void contextVerbosityChanged(int verbosity);
     void markerJumpSnapChanged(bool enabled);
+    void introDryRunModeChanged(int mode);
     void restartRequired();
 
 private slots:
@@ -58,6 +59,7 @@ private:
     QSlider   *m_audioCueVolume   = nullptr;
     QComboBox *m_contextVerbosity = nullptr;
     QCheckBox *m_markerJumpSnap   = nullptr;
+    QComboBox *m_introDryRunMode  = nullptr;
 
     // Embedded widgets
     ShortcutEditor *m_shortcutEditor = nullptr;

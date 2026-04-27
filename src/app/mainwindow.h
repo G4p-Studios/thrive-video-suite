@@ -60,6 +60,12 @@ private:
         Detailed
     };
 
+    enum class IntroDryRunMode {
+        AutoDetect,
+        VisualOnly,
+        AnnouncementOnly
+    };
+
     void createActions();
     void createMenus();
     void createDockWidgets();
@@ -128,6 +134,9 @@ private:
     QAction *m_actSplitClip      = nullptr;
     QAction *m_actAddTrack       = nullptr;
     QAction *m_actRemoveTrack    = nullptr;
+    QAction *m_actBuildIntroStack = nullptr;
+    QAction *m_actAddTextClip    = nullptr;
+    QAction *m_actApplyAvatarPreset = nullptr;
     QAction *m_actAddMarker      = nullptr;
     QAction *m_actRemoveMarker   = nullptr;
     QAction *m_actAddTransition  = nullptr;
@@ -174,6 +183,7 @@ private:
     QMenu   *m_recentMenu        = nullptr;
 
     ContextVerbosity m_contextVerbosity = ContextVerbosity::Normal;
+    IntroDryRunMode m_introDryRunMode = IntroDryRunMode::AutoDetect;
 };
 
 } // namespace Thrive

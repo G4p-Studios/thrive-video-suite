@@ -145,6 +145,9 @@ The following tables list the default keyboard shortcuts by editing workflow.
 | Split Clip at Playhead | S |
 | Add Track | T |
 | Remove Current Track | Shift+Delete |
+| Build Intro Stack | Ctrl+Shift+B |
+| Add Text Overlay Clip | Ctrl+Shift+T |
+| Apply Motion Preset | Ctrl+Shift+P |
 | Add Marker at Playhead | Shift+M |
 | Remove Marker at Playhead | Ctrl+Shift+M |
 | Add Transition | Shift+T |
@@ -184,7 +187,7 @@ The following tables list the default keyboard shortcuts by editing workflow.
 | Cut / Copy / Paste / Delete | Ctrl+X / Ctrl+C / Ctrl+V / Delete |
 | Select All | Ctrl+A |
 
-All shortcuts are customisable in **Preferences -> Shortcuts**. Context verbosity and marker jump snap defaults are configurable in **Preferences -> General** and are persisted between sessions.
+All shortcuts are customisable in **Preferences -> Shortcuts**. Context verbosity, marker jump snap, and Intro dry-run mode defaults are configurable in **Preferences -> General** and are persisted between sessions.
 
 ## Screen Reader Workflow Cheatsheet
 
@@ -195,16 +198,18 @@ This quick guide is for users who are new to editing video with a screen reader.
 1. Open Preferences with `Ctrl+,` and choose your defaults in **General**.
 2. Set **Context verbosity** to `Normal` or `Detailed` while learning.
 3. Keep **Marker jump snap** enabled at first.
-4. Use `Ctrl+Shift+W` any time to hear your current focus, playhead, and selection.
-5. Use `Ctrl+Shift+H` to hear keyboard help at any point.
+4. Set **Intro dry-run mode** to `Auto detect` unless you want to force visual or announcement-only dry-run behavior.
+5. Use `Ctrl+Shift+W` any time to hear your current focus, playhead, and selection.
+6. Use `Ctrl+Shift+H` to hear keyboard help at any point.
 
 ### 2) Build the Timeline Quickly
 
-1. Import media from the Media Browser (`Ctrl+I` to focus it).
-2. Move to Timeline with `Ctrl+1`.
-3. Use `Up/Down` to choose track and `Left/Right` to choose clip.
-4. Use `Page Up/Page Down` to jump 5 clips at a time.
-5. Use `Ctrl+Page Up/Ctrl+Page Down` to jump between non-empty tracks.
+1. For intro-style overlays, use `Ctrl+Shift+B` (**Build Intro Stack**) to create rings/shield/caption timing scaffolding.
+2. Import media from the Media Browser (`Ctrl+I` to focus it).
+3. Move to Timeline with `Ctrl+1`.
+4. Use `Up/Down` to choose track and `Left/Right` to choose clip.
+5. Use `Page Up/Page Down` to jump 5 clips at a time.
+6. Use `Ctrl+Page Up/Ctrl+Page Down` to jump between non-empty tracks.
 
 ### 3) Place and Refine Edits
 

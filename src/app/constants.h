@@ -38,6 +38,7 @@ inline constexpr const char *kSettingsAudioCuesOn    = "accessibility/audioCues"
 inline constexpr const char *kSettingsAudioCueVolume = "accessibility/audioCueVolume";
 inline constexpr const char *kSettingsContextVerbosity = "accessibility/contextVerbosity";
 inline constexpr const char *kSettingsMarkerJumpSnap = "timeline/markerJumpSnap";
+inline constexpr const char *kSettingsIntroDryRunMode = "accessibility/introDryRunMode";
 inline constexpr const char *kSettingsFirstRun       = "app/firstRun";
 
 /// Version stamp for QMainWindow::saveState / restoreState.

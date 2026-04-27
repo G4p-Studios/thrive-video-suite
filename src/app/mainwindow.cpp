@@ -22,6 +22,7 @@
 #include "../engine/tractorbuilder.h"
 #include "../accessibility/announcer.h"
 #include "../accessibility/audiocuemanager.h"
+#include "../accessibility/screenreader.h"
 
 #include "../ui/timelinewidget.h"
 #include "../ui/transportbar.h"
@@ -60,6 +61,13 @@
 #include <QAbstractSpinBox>
 #include <QSignalBlocker>
 #include <QSplitter>
+#include <QImage>
+#include <QPainter>
+#include <QPainterPath>
+#include <QPen>
+#include <QFont>
+#include <QFile>
+#include <QUuid>
 
 namespace Thrive {
 
@@ -169,6 +177,20 @@ MainWindow::MainWindow(Project *project,
         if (m_actToggleMarkerJumpSnap) {
             const QSignalBlocker blocker(m_actToggleMarkerJumpSnap);
             m_actToggleMarkerJumpSnap->setChecked(markerSnap);
+        }
+
+        const int dryRunMode = settings.value(
+            QLatin1String(kSettingsIntroDryRunMode), 0).toInt();
+        switch (dryRunMode) {
+        case 1:
+            m_introDryRunMode = IntroDryRunMode::VisualOnly;
+            break;
+        case 2:
+            m_introDryRunMode = IntroDryRunMode::AnnouncementOnly;
+            break;
+        default:
+            m_introDryRunMode = IntroDryRunMode::AutoDetect;
+            break;
         }
     }
 
@@ -455,6 +477,20 @@ void MainWindow::showPreferences()
                 if (m_timeline)
                     m_timeline->setMarkerJumpSnapEnabled(enabled);
             });
+    connect(dlg, &PreferencesDialog::introDryRunModeChanged,
+            this, [this](int mode) {
+                switch (mode) {
+                case 1:
+                    m_introDryRunMode = IntroDryRunMode::VisualOnly;
+                    break;
+                case 2:
+                    m_introDryRunMode = IntroDryRunMode::AnnouncementOnly;
+                    break;
+                default:
+                    m_introDryRunMode = IntroDryRunMode::AutoDetect;
+                    break;
+                }
+            });
     connect(dlg, &PreferencesDialog::restartRequired,
             this, [this]() {
                 QSettings().setValue(
@@ -691,6 +727,621 @@ void MainWindow::createActions()
         m_undoStack->push(new AddTrackCommand(tl, track));
         m_announcer->announce(
             tr("Added %1.").arg(track->name()),
+            Announcer::Priority::High);
+    });
+
+    m_actBuildIntroStack = new QAction(tr("Build &Intro Stack…"), this);
+    connect(m_actBuildIntroStack, &QAction::triggered, this, [this]() {
+        auto *tl = m_project->timeline();
+        if (!tl) {
+            m_announcer->announce(tr("Timeline is not available."),
+                                  Announcer::Priority::High);
+            m_cues->play(AudioCueManager::Cue::Error);
+            return;
+        }
+
+        const QString visualFilter =
+            tr("Visual Media (*.png *.jpg *.jpeg *.bmp *.webp *.gif *.mp4 *.mov *.mkv *.avi);;All Files (*)");
+
+        const QString ringsPath = QFileDialog::getOpenFileName(
+            this, tr("Select Rings Background"), QString(), visualFilter);
+        if (ringsPath.isEmpty())
+            return;
+
+        const QString shieldPath = QFileDialog::getOpenFileName(
+            this, tr("Select Shield Overlay"), QString(), visualFilter);
+        if (shieldPath.isEmpty())
+            return;
+
+        bool captionOk = false;
+        const QString captionText = QInputDialog::getText(
+            this,
+            tr("Caption Text"),
+            tr("Caption text above shield (leave empty to skip):"),
+            QLineEdit::Normal,
+            tr("WARNER BROS."),
+            &captionOk);
+        if (!captionOk)
+            return;
+
+        const bool includeLooney =
+            QMessageBox::question(
+                this,
+                tr("Include Looney Text"),
+                tr("Add Looney text phase after shield and caption fade out?"),
+                QMessageBox::Yes | QMessageBox::No,
+                QMessageBox::Yes) == QMessageBox::Yes;
+
+        QString looneyText;
+        if (includeLooney) {
+            bool looneyOk = false;
+            looneyText = QInputDialog::getText(
+                this,
+                tr("Looney Text"),
+                tr("Looney text content:"),
+                QLineEdit::Normal,
+                tr("LOONEY TUNES"),
+                &looneyOk);
+            if (!looneyOk)
+                return;
+        }
+
+        bool ok = false;
+        const double totalSeconds = QInputDialog::getDouble(
+            this, tr("Intro Duration"),
+            tr("Total intro length in seconds:"),
+            6.0, 1.0, 60.0, 1, &ok);
+        if (!ok)
+            return;
+
+        const double shieldInSeconds = QInputDialog::getDouble(
+            this, tr("Shield In Time"),
+            tr("Shield start time in seconds:"),
+            0.6, 0.0, totalSeconds, 1, &ok);
+        if (!ok)
+            return;
+
+        const double captionInSeconds = QInputDialog::getDouble(
+            this, tr("Caption In Time"),
+            tr("Caption start time in seconds:"),
+            1.2, 0.0, totalSeconds, 1, &ok);
+        if (!ok)
+            return;
+
+        double replaceSeconds = totalSeconds;
+        if (includeLooney) {
+            replaceSeconds = QInputDialog::getDouble(
+                this, tr("Looney Text Start"),
+                tr("Looney text start time in seconds:"),
+                3.5, 0.0, totalSeconds, 1, &ok);
+            if (!ok)
+                return;
+        }
+
+        const double fadeSeconds = QInputDialog::getDouble(
+            this, tr("Fade Duration"),
+            tr("Fade duration in seconds:"),
+            0.8, 0.1, 10.0, 1, &ok);
+        if (!ok)
+            return;
+
+        const double fps = m_project->fps();
+        const int64_t baseStart = tl->playheadPosition().frame();
+        const int64_t totalFrames = qMax<int64_t>(1, static_cast<int64_t>(totalSeconds * fps));
+        const int64_t shieldStart = qMax<int64_t>(0, static_cast<int64_t>(shieldInSeconds * fps));
+        const int64_t captionStart = qMax<int64_t>(0, static_cast<int64_t>(captionInSeconds * fps));
+        const int64_t replaceStart = qMax<int64_t>(0, static_cast<int64_t>(replaceSeconds * fps));
+        const int64_t fadeFrames = qMax<int64_t>(1, static_cast<int64_t>(fadeSeconds * fps));
+
+        const QString dryRunSummary = tr(
+            "Dry run summary. "
+            "Start at %1. Total %2 seconds. "
+            "Shield starts at %3 seconds. "
+            "Caption starts at %4 seconds. "
+            "Fade duration %5 seconds. "
+            "Looney text phase %6.")
+            .arg(TimeCode(baseStart, fps).toSpokenString())
+            .arg(totalSeconds, 0, 'f', 1)
+            .arg(shieldInSeconds, 0, 'f', 1)
+            .arg(captionInSeconds, 0, 'f', 1)
+            .arg(fadeSeconds, 0, 'f', 1)
+            .arg(includeLooney
+                ? tr("enabled at %1 seconds").arg(replaceSeconds, 0, 'f', 1)
+                : tr("disabled"));
+
+        const bool screenReaderActive = ScreenReader::instance().isScreenReaderActive();
+        const bool announcementOnly =
+            m_introDryRunMode == IntroDryRunMode::AnnouncementOnly
+            || (m_introDryRunMode == IntroDryRunMode::AutoDetect
+                && screenReaderActive);
+
+        if (announcementOnly) {
+            m_announcer->announce(dryRunSummary, Announcer::Priority::High);
+            m_announcer->announce(tr("Creating intro stack now."),
+                                  Announcer::Priority::Normal);
+        } else {
+            QMessageBox::information(
+                this,
+                tr("Intro Stack Dry Run"),
+                dryRunSummary);
+            const auto answer = QMessageBox::question(
+                this,
+                tr("Build Intro Stack"),
+                tr("Apply this intro stack now?"),
+                QMessageBox::Yes | QMessageBox::No,
+                QMessageBox::Yes);
+            if (answer != QMessageBox::Yes)
+                return;
+        }
+
+        auto ensureVideoTrack = [this, tl](const QString &baseName) -> Track * {
+            auto *track = new Track(baseName, Track::Type::Video);
+            m_undoStack->push(new AddTrackCommand(tl, track));
+            return track;
+        };
+
+        auto makeTextImage = [this](const QString &text) -> QString {
+            if (text.trimmed().isEmpty())
+                return QString();
+            const int width = qMax(320, m_project->width());
+            const int height = qMax(180, m_project->height());
+            QImage image(width, height, QImage::Format_ARGB32_Premultiplied);
+            image.fill(Qt::transparent);
+
+            QPainter painter(&image);
+            painter.setRenderHint(QPainter::Antialiasing, true);
+            painter.setRenderHint(QPainter::TextAntialiasing, true);
+
+            QFont font;
+            font.setPointSize(qMax(24, height / 12));
+            font.setBold(true);
+            painter.setFont(font);
+
+            QPainterPath path;
+            path.addText(0.0, 0.0, font, text);
+            const QRectF b = path.boundingRect();
+            QTransform transform;
+            transform.translate((width - b.width()) / 2.0 - b.left(),
+                                (height - b.height()) / 2.0 - b.top());
+            QPainterPath centered = transform.map(path);
+
+            painter.setPen(QPen(QColor(0, 0, 0, 220), 4.0,
+                                Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+            painter.setBrush(QColor(255, 255, 255, 255));
+            painter.drawPath(centered);
+            painter.end();
+
+            const QString baseDir = QStandardPaths::writableLocation(
+                QStandardPaths::AppDataLocation) + QStringLiteral("/text-overlays");
+            QDir().mkpath(baseDir);
+            const QString filePath = baseDir
+                + QStringLiteral("/text_overlay_")
+                + QUuid::createUuid().toString(QUuid::WithoutBraces)
+                + QStringLiteral(".png");
+            if (!image.save(filePath, "PNG"))
+                return QString();
+            return filePath;
+        };
+
+        auto addClip = [this, fps, baseStart](Track *track,
+                                              const QString &name,
+                                              const QString &path,
+                                              int64_t relStart,
+                                              int64_t durationFrames) -> Clip * {
+            if (!track || path.isEmpty() || durationFrames <= 0)
+                return nullptr;
+            auto *clip = new Clip(name,
+                                  path,
+                                  TimeCode(0, fps),
+                                  TimeCode(durationFrames - 1, fps));
+            clip->setTimelinePosition(TimeCode(baseStart + relStart, fps));
+            m_undoStack->push(new AddClipCommand(track, clip));
+            return clip;
+        };
+
+        auto ensureEffect = [this](Clip *clip,
+                                   const QString &sid,
+                                   const QString &name,
+                                   const QString &desc) -> Effect * {
+            if (!clip)
+                return nullptr;
+            for (auto *fx : clip->effects()) {
+                if (fx && fx->serviceId() == sid)
+                    return fx;
+            }
+            auto *fx = new Effect(sid, name, desc);
+            m_undoStack->push(new AddEffectCommand(clip, fx));
+            return fx;
+        };
+
+        auto ensureStringParam = [](Effect *fx, const QString &id,
+                                    const QString &display,
+                                    const QString &value) {
+            if (!fx)
+                return;
+            bool found = false;
+            for (const auto &p : fx->parameters()) {
+                if (p.id == id) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                EffectParameter param;
+                param.id = id;
+                param.displayName = display;
+                param.type = QStringLiteral("string");
+                param.defaultValue = value;
+                param.currentValue = value;
+                fx->addParameter(param);
+            }
+            fx->setParameterValue(id, value);
+        };
+
+        m_undoStack->beginMacro(tr("Build intro stack"));
+
+        auto *ringsTrack = ensureVideoTrack(tr("Rings"));
+        auto *shieldTrack = ensureVideoTrack(tr("Shield"));
+        auto *captionTrack = captionText.trimmed().isEmpty()
+            ? nullptr : ensureVideoTrack(tr("Caption"));
+        auto *looneyTrack = includeLooney
+            ? ensureVideoTrack(tr("Looney Text")) : nullptr;
+
+        auto *ringsClip = addClip(ringsTrack, tr("Rings"), ringsPath,
+                                  0, totalFrames);
+        Q_UNUSED(ringsClip)
+
+        int64_t shieldDuration = includeLooney
+            ? qMax<int64_t>(1, (replaceStart + fadeFrames) - shieldStart)
+            : qMax<int64_t>(1, totalFrames - shieldStart);
+        auto *shieldClip = addClip(shieldTrack, tr("Shield"), shieldPath,
+                                   shieldStart, shieldDuration);
+
+        if (shieldClip) {
+            auto *transformFx = ensureEffect(
+                shieldClip, QStringLiteral("affine"),
+                tr("Transform"), tr("Position and scale"));
+            ensureStringParam(transformFx, QStringLiteral("transition.rect"),
+                              tr("Geometry"),
+                              QStringLiteral("0=25%/25%:50%x50%:100;100=0/0:100%x100%:100"));
+            ensureEffect(shieldClip, QStringLiteral("fadeInBrightness"),
+                         tr("Fade In (Brightness)"),
+                         tr("Fade in from black"));
+            if (includeLooney) {
+                ensureEffect(shieldClip, QStringLiteral("fadeOutBrightness"),
+                             tr("Fade Out (Brightness)"),
+                             tr("Fade out to black"));
+            }
+        }
+
+        if (captionTrack) {
+            const QString captionPath = makeTextImage(captionText);
+            int64_t captionDuration = includeLooney
+                ? qMax<int64_t>(1, (replaceStart + fadeFrames) - captionStart)
+                : qMax<int64_t>(1, totalFrames - captionStart);
+            auto *captionClip = addClip(captionTrack, tr("Caption"),
+                                        captionPath, captionStart,
+                                        captionDuration);
+            if (captionClip) {
+                auto *transformFx = ensureEffect(
+                    captionClip, QStringLiteral("affine"),
+                    tr("Transform"), tr("Position and scale"));
+                ensureStringParam(transformFx, QStringLiteral("transition.rect"),
+                                  tr("Geometry"),
+                                  QStringLiteral("0/-35:100%x100%:100"));
+                if (includeLooney) {
+                    ensureEffect(captionClip, QStringLiteral("fadeOutBrightness"),
+                                 tr("Fade Out (Brightness)"),
+                                 tr("Fade out to black"));
+                }
+            }
+        }
+
+        if (includeLooney && looneyTrack) {
+            const QString looneyPath = makeTextImage(looneyText);
+            const int64_t looneyDuration = qMax<int64_t>(1, totalFrames - replaceStart);
+            auto *looneyClip = addClip(looneyTrack, tr("Looney Text"),
+                                       looneyPath, replaceStart,
+                                       looneyDuration);
+            if (looneyClip) {
+                ensureEffect(looneyClip, QStringLiteral("fadeInBrightness"),
+                             tr("Fade In (Brightness)"),
+                             tr("Fade in from black"));
+            }
+        }
+
+        m_undoStack->endMacro();
+
+        m_modified = true;
+        deferRebuildTractor();
+        m_timeline->refresh();
+        m_announcer->announce(
+            includeLooney
+                ? tr("Intro stack created with rings, shield, caption, and Looney text.")
+                : tr("Intro stack created with rings, shield, and caption."),
+            Announcer::Priority::High);
+    });
+
+    m_actAddTextClip = new QAction(tr("Add Te&xt Overlay Clip…"), this);
+    connect(m_actAddTextClip, &QAction::triggered, this, [this]() {
+        bool ok = false;
+        const QString text = QInputDialog::getMultiLineText(
+            this,
+            tr("Add Text Overlay Clip"),
+            tr("Text content:"),
+            QString(),
+            &ok);
+        if (!ok || text.trimmed().isEmpty())
+            return;
+
+        bool durOk = false;
+        const double seconds = QInputDialog::getDouble(
+            this,
+            tr("Text Duration"),
+            tr("Duration in seconds:"),
+            2.0,
+            0.2,
+            120.0,
+            1,
+            &durOk);
+        if (!durOk)
+            return;
+
+        auto *tl = m_project->timeline();
+        if (!tl) {
+            m_announcer->announce(tr("Timeline is not available."),
+                                  Announcer::Priority::High);
+            m_cues->play(AudioCueManager::Cue::Error);
+            return;
+        }
+
+        if (tl->trackCount() == 0) {
+            m_undoStack->push(
+                new AddTrackCommand(
+                    tl,
+                    new Track(tr("Video 1"), Track::Type::Video)));
+        }
+
+        Track *targetTrack = nullptr;
+        auto *current = tl->trackAt(tl->currentTrackIndex());
+        if (current && !current->isLocked() && current->type() == Track::Type::Video) {
+            targetTrack = current;
+        } else {
+            for (auto *candidate : tl->tracks()) {
+                if (candidate && !candidate->isLocked()
+                    && candidate->type() == Track::Type::Video) {
+                    targetTrack = candidate;
+                    break;
+                }
+            }
+        }
+
+        if (!targetTrack) {
+            int videoCount = 0;
+            for (auto *t : tl->tracks()) {
+                if (t && t->type() == Track::Type::Video)
+                    ++videoCount;
+            }
+            auto *newTrack = new Track(
+                tr("Video %1").arg(videoCount + 1), Track::Type::Video);
+            m_undoStack->push(new AddTrackCommand(tl, newTrack));
+            targetTrack = newTrack;
+        }
+
+        if (!targetTrack || targetTrack->isLocked()) {
+            m_announcer->announce(
+                tr("No unlocked video track available for text overlay."),
+                Announcer::Priority::High);
+            m_cues->play(AudioCueManager::Cue::Error);
+            return;
+        }
+
+        const int width = qMax(320, m_project->width());
+        const int height = qMax(180, m_project->height());
+        QImage image(width, height, QImage::Format_ARGB32_Premultiplied);
+        image.fill(Qt::transparent);
+
+        QPainter painter(&image);
+        painter.setRenderHint(QPainter::Antialiasing, true);
+        painter.setRenderHint(QPainter::TextAntialiasing, true);
+
+        QFont font;
+        font.setPointSize(qMax(24, height / 12));
+        font.setBold(true);
+        painter.setFont(font);
+
+        QPainterPath path;
+        path.addText(0.0, 0.0, font, text);
+        const QRectF b = path.boundingRect();
+        QTransform transform;
+        transform.translate((width - b.width()) / 2.0 - b.left(),
+                            (height - b.height()) / 2.0 - b.top());
+        QPainterPath centered = transform.map(path);
+
+        painter.setPen(QPen(QColor(0, 0, 0, 220), 4.0,
+                            Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        painter.setBrush(QColor(255, 255, 255, 255));
+        painter.drawPath(centered);
+        painter.end();
+
+        const QString baseDir = QStandardPaths::writableLocation(
+            QStandardPaths::AppDataLocation) + QStringLiteral("/text-overlays");
+        QDir().mkpath(baseDir);
+        const QString filePath = baseDir
+            + QStringLiteral("/text_overlay_")
+            + QUuid::createUuid().toString(QUuid::WithoutBraces)
+            + QStringLiteral(".png");
+
+        if (!image.save(filePath, "PNG")) {
+            m_announcer->announce(tr("Failed to create text overlay image."),
+                                  Announcer::Priority::High);
+            m_cues->play(AudioCueManager::Cue::Error);
+            return;
+        }
+
+        const double fps = m_project->fps();
+        const int64_t durationFrames = qMax<int64_t>(1,
+            static_cast<int64_t>(seconds * fps));
+        auto *clip = new Clip(
+            tr("Text: %1").arg(text.left(24).trimmed()),
+            filePath,
+            TimeCode(0, fps),
+            TimeCode(durationFrames - 1, fps));
+
+        const int64_t desiredStart = tl->playheadPosition().frame();
+        int64_t start = qMax<int64_t>(0, desiredStart);
+        bool moved = true;
+        while (moved) {
+            moved = false;
+            const int64_t end = start + durationFrames;
+            for (auto *existing : targetTrack->clips()) {
+                if (!existing)
+                    continue;
+                const int64_t exStart = existing->timelinePosition().frame();
+                const int64_t exSpan = qMax<int64_t>(1, existing->duration().frame());
+                const int64_t exEnd = exStart + exSpan;
+                const bool overlaps = !(end <= exStart || start >= exEnd);
+                if (overlaps) {
+                    start = exEnd;
+                    moved = true;
+                    break;
+                }
+            }
+        }
+        clip->setTimelinePosition(TimeCode(start, fps));
+
+        m_undoStack->push(new AddClipCommand(targetTrack, clip));
+        m_modified = true;
+        deferRebuildTractor();
+
+        for (int i = 0; i < tl->trackCount(); ++i) {
+            if (tl->trackAt(i) == targetTrack) {
+                tl->setCurrentTrackIndex(i);
+                tl->setCurrentClipIndex(targetTrack->clipCount() - 1);
+                break;
+            }
+        }
+
+        m_cues->play(AudioCueManager::Cue::ClipAdded);
+        m_announcer->announce(
+            tr("Added text overlay clip to %1 at %2.")
+                .arg(targetTrack->name(),
+                     clip->timelinePosition().toSpokenString()),
+            Announcer::Priority::High);
+    });
+
+    m_actApplyAvatarPreset = new QAction(tr("Apply &Motion Preset…"), this);
+    connect(m_actApplyAvatarPreset, &QAction::triggered, this, [this]() {
+        auto *tl = m_project->timeline();
+        auto *trk = tl ? tl->trackAt(tl->currentTrackIndex()) : nullptr;
+        const int idx = tl ? tl->currentClipIndex() : -1;
+        if (!trk || idx < 0 || idx >= trk->clipCount()) {
+            m_announcer->announce(tr("Select a clip first."),
+                                  Announcer::Priority::Normal);
+            m_cues->play(AudioCueManager::Cue::Error);
+            return;
+        }
+        if (trk->isLocked()) {
+            m_announcer->announce(tr("Track is locked."),
+                                  Announcer::Priority::Normal);
+            m_cues->play(AudioCueManager::Cue::Error);
+            return;
+        }
+
+        auto *clip = trk->clipAt(idx);
+        QStringList presets;
+        presets << tr("Center Overlay")
+                << tr("Top Caption")
+                << tr("Zoom In")
+                << tr("Fade In")
+                << tr("Fade Out");
+        bool ok = false;
+        const QString preset = QInputDialog::getItem(
+            this, tr("Motion Preset"), tr("Preset:"),
+            presets, 0, false, &ok);
+        if (!ok)
+            return;
+
+        auto findEffect = [clip](const QString &sid) -> Effect * {
+            for (auto *fx : clip->effects()) {
+                if (fx && fx->serviceId() == sid)
+                    return fx;
+            }
+            return nullptr;
+        };
+
+        auto ensureEffect = [this, clip, &findEffect](const QString &sid,
+                                                      const QString &name,
+                                                      const QString &desc) -> Effect * {
+            if (auto *existing = findEffect(sid))
+                return existing;
+            auto *fx = new Effect(sid, name, desc);
+            m_undoStack->push(new AddEffectCommand(clip, fx));
+            return fx;
+        };
+
+        auto ensureStringParam = [](Effect *fx, const QString &id,
+                                    const QString &display,
+                                    const QString &value) {
+            if (!fx)
+                return;
+            bool found = false;
+            for (const auto &p : fx->parameters()) {
+                if (p.id == id) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                EffectParameter param;
+                param.id = id;
+                param.displayName = display;
+                param.type = QStringLiteral("string");
+                param.defaultValue = value;
+                param.currentValue = value;
+                fx->addParameter(param);
+            }
+            fx->setParameterValue(id, value);
+        };
+
+        if (preset == presets.at(0)) {
+            auto *fx = ensureEffect(QStringLiteral("affine"),
+                                    tr("Transform"),
+                                    tr("Position and scale"));
+            ensureStringParam(fx, QStringLiteral("transition.rect"),
+                              tr("Geometry"),
+                              QStringLiteral("0/0:100%x100%:100"));
+        } else if (preset == presets.at(1)) {
+            auto *fx = ensureEffect(QStringLiteral("affine"),
+                                    tr("Transform"),
+                                    tr("Position and scale"));
+            ensureStringParam(fx, QStringLiteral("transition.rect"),
+                              tr("Geometry"),
+                              QStringLiteral("0/-35:100%x100%:100"));
+        } else if (preset == presets.at(2)) {
+            auto *fx = ensureEffect(QStringLiteral("affine"),
+                                    tr("Transform"),
+                                    tr("Position and scale"));
+            ensureStringParam(fx, QStringLiteral("transition.rect"),
+                              tr("Geometry"),
+                              QStringLiteral("0=25%/25%:50%x50%:100;100=0/0:100%x100%:100"));
+            ensureEffect(QStringLiteral("fadeInBrightness"),
+                         tr("Fade In (Brightness)"),
+                         tr("Fade in from black"));
+        } else if (preset == presets.at(3)) {
+            ensureEffect(QStringLiteral("fadeInBrightness"),
+                         tr("Fade In (Brightness)"),
+                         tr("Fade in from black"));
+        } else if (preset == presets.at(4)) {
+            ensureEffect(QStringLiteral("fadeOutBrightness"),
+                         tr("Fade Out (Brightness)"),
+                         tr("Fade out to black"));
+        }
+
+        m_modified = true;
+        rebuildTractor();
+        m_announcer->announce(
+            tr("Applied preset %1 to %2.").arg(preset, clip->name()),
             Announcer::Priority::High);
     });
 
@@ -1363,6 +2014,9 @@ void MainWindow::createMenus()
     timelineMenu->addSeparator();
     timelineMenu->addAction(m_actAddTrack);
     timelineMenu->addAction(m_actRemoveTrack);
+    timelineMenu->addAction(m_actBuildIntroStack);
+    timelineMenu->addAction(m_actAddTextClip);
+    timelineMenu->addAction(m_actApplyAvatarPreset);
     timelineMenu->addSeparator();
     timelineMenu->addAction(m_actAddMarker);
     timelineMenu->addAction(m_actRemoveMarker);
@@ -1773,6 +2427,12 @@ void MainWindow::registerShortcuts()
                       QKeySequence(QStringLiteral("T")));
     sm.registerAction(QStringLiteral("timeline.removeTrack"), m_actRemoveTrack,
                       QKeySequence(QStringLiteral("Shift+Delete")));
+    sm.registerAction(QStringLiteral("timeline.buildIntroStack"), m_actBuildIntroStack,
+                      QKeySequence(QStringLiteral("Ctrl+Shift+B")));
+    sm.registerAction(QStringLiteral("timeline.addTextClip"), m_actAddTextClip,
+                      QKeySequence(QStringLiteral("Ctrl+Shift+T")));
+    sm.registerAction(QStringLiteral("timeline.applyAvatarPreset"), m_actApplyAvatarPreset,
+                      QKeySequence(QStringLiteral("Ctrl+Shift+P")));
     sm.registerAction(QStringLiteral("timeline.addMarker"), m_actAddMarker,
                       QKeySequence(QStringLiteral("Shift+M")));
     sm.registerAction(QStringLiteral("timeline.addTransition"), m_actAddTransition,

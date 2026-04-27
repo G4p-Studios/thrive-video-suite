@@ -133,6 +133,23 @@ QWidget *PreferencesDialog::createGeneralTab()
     }
     form->addRow(m_markerJumpSnap);
 
+    // Intro dry-run mode
+    m_introDryRunMode = new QComboBox(page);
+    m_introDryRunMode->setAccessibleName(tr("Intro stack dry run mode"));
+    m_introDryRunMode->addItem(tr("Auto detect"), 0);
+    m_introDryRunMode->addItem(tr("Always visual"), 1);
+    m_introDryRunMode->addItem(tr("Always announcement only"), 2);
+    {
+        QSettings settings;
+        const int savedMode = settings.value(
+            QLatin1String(kSettingsIntroDryRunMode), 0).toInt();
+        int idxMode = m_introDryRunMode->findData(savedMode);
+        if (idxMode < 0)
+            idxMode = 0;
+        m_introDryRunMode->setCurrentIndex(idxMode);
+    }
+    form->addRow(tr("Intro dry-&run mode:"), m_introDryRunMode);
+
     return page;
 }
 
@@ -152,6 +169,7 @@ void PreferencesDialog::onAccepted()
         static_cast<float>(m_audioCueVolume->value()) / 100.0f);
     emit contextVerbosityChanged(m_contextVerbosity->currentData().toInt());
     emit markerJumpSnapChanged(m_markerJumpSnap->isChecked());
+    emit introDryRunModeChanged(m_introDryRunMode->currentData().toInt());
 
     // Persist audio cue settings so they survive restart
     QSettings settings;
@@ -163,6 +181,8 @@ void PreferencesDialog::onAccepted()
                       m_contextVerbosity->currentData().toInt());
     settings.setValue(QLatin1String(kSettingsMarkerJumpSnap),
                       m_markerJumpSnap->isChecked());
+    settings.setValue(QLatin1String(kSettingsIntroDryRunMode),
+                      m_introDryRunMode->currentData().toInt());
 
     accept();
 }
