@@ -58,6 +58,7 @@
 #include <QAbstractButton>
 #include <QComboBox>
 #include <QAbstractSpinBox>
+#include <QSignalBlocker>
 #include <QSplitter>
 
 namespace Thrive {
@@ -145,6 +146,32 @@ MainWindow::MainWindow(Project *project,
             });
 
     createActions();
+
+    // Load persisted accessibility/navigation preferences
+    {
+        QSettings settings;
+        const int verbosity = settings.value(
+            QLatin1String(kSettingsContextVerbosity), 1).toInt();
+        switch (verbosity) {
+        case 0:
+            m_contextVerbosity = ContextVerbosity::Short;
+            break;
+        case 2:
+            m_contextVerbosity = ContextVerbosity::Detailed;
+            break;
+        default:
+            m_contextVerbosity = ContextVerbosity::Normal;
+            break;
+        }
+
+        const bool markerSnap = settings.value(
+            QLatin1String(kSettingsMarkerJumpSnap), true).toBool();
+        if (m_actToggleMarkerJumpSnap) {
+            const QSignalBlocker blocker(m_actToggleMarkerJumpSnap);
+            m_actToggleMarkerJumpSnap->setChecked(markerSnap);
+        }
+    }
+
     createMenus();
     createDockWidgets();
     registerShortcuts();
@@ -407,6 +434,27 @@ void MainWindow::showPreferences()
             m_cues, &AudioCueManager::setEnabled);
     connect(dlg, &PreferencesDialog::audioCueVolumeChanged,
             m_cues, &AudioCueManager::setVolume);
+    connect(dlg, &PreferencesDialog::contextVerbosityChanged,
+            this, [this](int verbosity) {
+                switch (verbosity) {
+                case 0:
+                    m_contextVerbosity = ContextVerbosity::Short;
+                    break;
+                case 2:
+                    m_contextVerbosity = ContextVerbosity::Detailed;
+                    break;
+                default:
+                    m_contextVerbosity = ContextVerbosity::Normal;
+                    break;
+                }
+            });
+    connect(dlg, &PreferencesDialog::markerJumpSnapChanged,
+            this, [this](bool enabled) {
+                if (m_actToggleMarkerJumpSnap)
+                    m_actToggleMarkerJumpSnap->setChecked(enabled);
+                if (m_timeline)
+                    m_timeline->setMarkerJumpSnapEnabled(enabled);
+            });
     connect(dlg, &PreferencesDialog::restartRequired,
             this, [this]() {
                 QSettings().setValue(
@@ -1019,30 +1067,135 @@ void MainWindow::createActions()
         if (focusName.isEmpty())
             focusName = tr("Unknown focus");
 
-        QString message = tr("Focus: %1.").arg(focusName);
-        if (tl) {
-            message += QLatin1Char(' ')
-                       + tr("Playhead %1.")
-                             .arg(tl->playheadPosition().toSpokenString());
-        }
-        if (trk) {
-            message += QLatin1Char(' ')
-                       + tr("Track %1 of %2: %3.")
-                             .arg(tl->currentTrackIndex() + 1)
-                             .arg(tl->trackCount())
-                             .arg(trk->name());
-
-            const int clipIdx = tl->currentClipIndex();
-            if (clipIdx >= 0 && clipIdx < trk->clipCount()) {
+        QString message;
+        switch (m_contextVerbosity) {
+        case ContextVerbosity::Short:
+            message = tr("Focus: %1.").arg(focusName);
+            if (tl) {
                 message += QLatin1Char(' ')
-                           + tr("Clip %1 of %2: %3.")
-                                 .arg(clipIdx + 1)
-                                 .arg(trk->clipCount())
-                                 .arg(trk->clipAt(clipIdx)->name());
+                           + tr("Playhead %1.")
+                                 .arg(tl->playheadPosition().toSpokenString());
             }
+            break;
+
+        case ContextVerbosity::Normal:
+            message = tr("Focus: %1.").arg(focusName);
+            if (tl) {
+                message += QLatin1Char(' ')
+                           + tr("Playhead %1.")
+                                 .arg(tl->playheadPosition().toSpokenString());
+            }
+            if (trk) {
+                message += QLatin1Char(' ')
+                           + tr("Track %1 of %2: %3.")
+                                 .arg(tl->currentTrackIndex() + 1)
+                                 .arg(tl->trackCount())
+                                 .arg(trk->name());
+
+                const int clipIdx = tl->currentClipIndex();
+                if (clipIdx >= 0 && clipIdx < trk->clipCount()) {
+                    message += QLatin1Char(' ')
+                               + tr("Clip %1 of %2: %3.")
+                                     .arg(clipIdx + 1)
+                                     .arg(trk->clipCount())
+                                     .arg(trk->clipAt(clipIdx)->name());
+                }
+            }
+            break;
+
+        case ContextVerbosity::Detailed:
+            message = tr("Focus: %1.").arg(focusName);
+            if (tl) {
+                message += QLatin1Char(' ')
+                           + tr("Playhead %1.")
+                                 .arg(tl->playheadPosition().toSpokenString());
+                message += QLatin1Char(' ')
+                           + tr("%1 marker(s) in project.")
+                                 .arg(tl->markers().size());
+            }
+            if (trk) {
+                message += QLatin1Char(' ')
+                           + tr("Track %1 of %2: %3.")
+                                 .arg(tl->currentTrackIndex() + 1)
+                                 .arg(tl->trackCount())
+                                 .arg(trk->name());
+                message += QLatin1Char(' ')
+                           + tr("Track type %1. %2. %3.")
+                                 .arg(trk->type() == Track::Type::Audio ? tr("Audio") : tr("Video"))
+                                 .arg(trk->isMuted() ? tr("Muted") : tr("Unmuted"))
+                                 .arg(trk->isLocked() ? tr("Locked") : tr("Unlocked"));
+
+                const int clipIdx = tl->currentClipIndex();
+                if (clipIdx >= 0 && clipIdx < trk->clipCount()) {
+                    auto *clip = trk->clipAt(clipIdx);
+                    message += QLatin1Char(' ')
+                               + tr("Clip %1 of %2: %3.")
+                                     .arg(clipIdx + 1)
+                                     .arg(trk->clipCount())
+                                     .arg(clip->name());
+                    message += QLatin1Char(' ')
+                               + tr("Clip starts at %1 and lasts %2.")
+                                     .arg(clip->timelinePosition().toSpokenString())
+                                     .arg(clip->duration().toSpokenString());
+                    message += QLatin1Char(' ')
+                               + tr("%1 effect(s) on clip.")
+                                     .arg(clip->effects().size());
+                }
+            }
+            break;
         }
 
         m_announcer->announce(message, Announcer::Priority::High);
+    });
+
+    m_actCycleContextVerbosity = new QAction(
+        tr("Cycle Conte&xt Verbosity"), this);
+    connect(m_actCycleContextVerbosity, &QAction::triggered,
+            this, [this]() {
+                switch (m_contextVerbosity) {
+                case ContextVerbosity::Short:
+                    m_contextVerbosity = ContextVerbosity::Normal;
+                    m_announcer->announce(tr("Context verbosity: normal."),
+                                          Announcer::Priority::Normal);
+                    break;
+                case ContextVerbosity::Normal:
+                    m_contextVerbosity = ContextVerbosity::Detailed;
+                    m_announcer->announce(tr("Context verbosity: detailed."),
+                                          Announcer::Priority::Normal);
+                    break;
+                case ContextVerbosity::Detailed:
+                    m_contextVerbosity = ContextVerbosity::Short;
+                    m_announcer->announce(tr("Context verbosity: short."),
+                                          Announcer::Priority::Normal);
+                    break;
+                }
+            });
+
+    m_actToggleMarkerJumpSnap = new QAction(
+        tr("Toggle Marker Jump &Snap"), this);
+    m_actToggleMarkerJumpSnap->setCheckable(true);
+    m_actToggleMarkerJumpSnap->setChecked(true);
+    connect(m_actToggleMarkerJumpSnap, &QAction::toggled,
+            this, [this](bool enabled) {
+                if (m_timeline)
+                    m_timeline->setMarkerJumpSnapEnabled(enabled);
+                m_announcer->announce(
+                    enabled ? tr("Marker jump snap on.")
+                            : tr("Marker jump snap off."),
+                    Announcer::Priority::Normal);
+            });
+
+    m_actAnnounceShortcuts = new QAction(tr("Announce &Keyboard Help"), this);
+    connect(m_actAnnounceShortcuts, &QAction::triggered, this, [this]() {
+        const QString help = tr(
+            "Keyboard help. "
+            "Space play or pause, J rewind, K stop, L fast forward. "
+            "Timeline arrows move tracks and clips. "
+            "Page Up and Page Down jump five clips. "
+            "Control plus Page Up and Control plus Page Down jump to previous or next non-empty track. "
+            "Control plus Home and Control plus End jump to first or last clip on the current track. "
+            "Control 1 focuses timeline, Control 2 focuses transport, Control I media, Control E effects, Control P properties.");
+        m_announcer->announce(help, Announcer::Priority::High);
     });
 
     // ── Move track up / down ──────────────────────────────────────────
@@ -1213,6 +1366,7 @@ void MainWindow::createMenus()
     timelineMenu->addSeparator();
     timelineMenu->addAction(m_actAddMarker);
     timelineMenu->addAction(m_actRemoveMarker);
+    timelineMenu->addAction(m_actToggleMarkerJumpSnap);
     timelineMenu->addSeparator();
     timelineMenu->addAction(m_actAddTransition);
     timelineMenu->addSeparator();
@@ -1248,8 +1402,11 @@ void MainWindow::createMenus()
     viewMenu->addAction(m_actFocusProperties);
     viewMenu->addSeparator();
     viewMenu->addAction(m_actAnnounceContext);
+    viewMenu->addAction(m_actCycleContextVerbosity);
 
     auto *helpMenu = menuBar()->addMenu(tr("&Help"));
+    helpMenu->addAction(m_actAnnounceShortcuts);
+    helpMenu->addSeparator();
     helpMenu->addAction(m_actWizard);
     helpMenu->addAction(m_actAbout);
 }
@@ -1266,6 +1423,9 @@ void MainWindow::createDockWidgets()
     // Timeline (bottom of centre)
     m_timeline = new TimelineWidget(
         m_project->timeline(), m_announcer, m_cues, m_engine, this);
+    m_timeline->setMarkerJumpSnapEnabled(
+        m_actToggleMarkerJumpSnap ? m_actToggleMarkerJumpSnap->isChecked()
+                                  : true);
     centralSplitter->addWidget(m_timeline);
 
     // Give the preview roughly 2/3 of the space, timeline 1/3
@@ -1385,15 +1545,66 @@ void MainWindow::createDockWidgets()
                 auto *clip = new Clip(
                     QFileInfo(filePath).fileName(),
                     filePath, inPt, outPt);
-                clip->setTimelinePosition(tl->playheadPosition());
+                const int64_t desiredStartFrame =
+                    tl->playheadPosition().frame();
 
                 // Add to the currently selected track
-                int trkIdx = tl->currentTrackIndex();
-                auto *trk = tl->trackAt(trkIdx);
+                auto *trk = tl->trackAt(tl->currentTrackIndex());
+
+                const QString ext = QFileInfo(filePath).suffix().toLower();
+                const QStringList audioExt = {
+                    QStringLiteral("wav"), QStringLiteral("mp3"),
+                    QStringLiteral("flac"), QStringLiteral("ogg"),
+                    QStringLiteral("m4a"), QStringLiteral("aac"),
+                    QStringLiteral("wma"), QStringLiteral("aiff")
+                };
+                const Track::Type preferredType =
+                    audioExt.contains(ext) ? Track::Type::Audio
+                                           : Track::Type::Video;
+
+                auto pickTargetTrack = [&](Track::Type preferred) -> Track * {
+                    auto *current = tl->trackAt(tl->currentTrackIndex());
+                    if (current && !current->isLocked()
+                        && current->type() == preferred) {
+                        return current;
+                    }
+
+                    for (auto *candidate : tl->tracks()) {
+                        if (candidate && !candidate->isLocked()
+                            && candidate->type() == preferred) {
+                            return candidate;
+                        }
+                    }
+
+                    if (current && !current->isLocked())
+                        return current;
+
+                    for (auto *candidate : tl->tracks()) {
+                        if (candidate && !candidate->isLocked())
+                            return candidate;
+                    }
+
+                    return nullptr;
+                };
+
+                trk = pickTargetTrack(preferredType);
                 if (!trk) {
-                    // Fallback to track 0
-                    trk = tl->trackAt(0);
+                    int sameTypeCount = 0;
+                    for (auto *existing : tl->tracks()) {
+                        if (existing && existing->type() == preferredType)
+                            ++sameTypeCount;
+                    }
+
+                    const QString baseName =
+                        preferredType == Track::Type::Audio ? tr("Audio")
+                                                            : tr("Video");
+                    auto *newTrack = new Track(
+                        tr("%1 %2").arg(baseName).arg(sameTypeCount + 1),
+                        preferredType);
+                    m_undoStack->push(new AddTrackCommand(tl, newTrack));
+                    trk = newTrack;
                 }
+
                 if (!trk) {
                     m_announcer->announce(
                         tr("No track available. Add a track first."),
@@ -1402,16 +1613,66 @@ void MainWindow::createDockWidgets()
                     return;
                 }
 
+                const int64_t clipSpanFrames =
+                    qMax<int64_t>(1, clip->duration().frame());
+                auto findAvailableStart = [&](int64_t desiredStart) {
+                    int64_t start = qMax<int64_t>(0, desiredStart);
+                    bool moved = true;
+                    while (moved) {
+                        moved = false;
+                        const int64_t end = start + clipSpanFrames;
+                        for (auto *existing : trk->clips()) {
+                            if (!existing)
+                                continue;
+                            const int64_t exStart =
+                                existing->timelinePosition().frame();
+                            const int64_t exSpan =
+                                qMax<int64_t>(1, existing->duration().frame());
+                            const int64_t exEnd = exStart + exSpan;
+
+                            const bool overlaps = !(end <= exStart || start >= exEnd);
+                            if (overlaps) {
+                                start = exEnd;
+                                moved = true;
+                                break;
+                            }
+                        }
+                    }
+                    return start;
+                };
+
+                const int64_t placedStartFrame =
+                    findAvailableStart(desiredStartFrame);
+                clip->setTimelinePosition(TimeCode(placedStartFrame, fps));
+
                 m_undoStack->push(new AddClipCommand(trk, clip));
                 m_modified = true;
                 deferRebuildTractor();
 
+                for (int i = 0; i < tl->trackCount(); ++i) {
+                    if (tl->trackAt(i) == trk) {
+                        tl->setCurrentTrackIndex(i);
+                        tl->setCurrentClipIndex(trk->clipCount() - 1);
+                        break;
+                    }
+                }
+
                 m_cues->play(AudioCueManager::Cue::ClipAdded);
+                QString placementNote;
+                if (placedStartFrame != desiredStartFrame) {
+                    const TimeCode delta(
+                        qAbs(placedStartFrame - desiredStartFrame), fps);
+                    placementNote = tr("Placed at next free position, %1 from playhead.")
+                                        .arg(delta.toSpokenString());
+                }
+                QString addedMessage = tr("Added %1 to %2 at %3 (%4).")
+                    .arg(clip->name(), trk->name(),
+                         clip->timelinePosition().toSpokenString(),
+                         clip->duration().toSpokenString());
+                if (!placementNote.isEmpty())
+                    addedMessage += QLatin1Char(' ') + placementNote;
                 m_announcer->announce(
-                    tr("Added %1 to %2 at %3 (%4).")
-                        .arg(clip->name(), trk->name(),
-                             clip->timelinePosition().toSpokenString(),
-                             clip->duration().toSpokenString()),
+                    addedMessage,
                     Announcer::Priority::High);
             });
 
@@ -1541,14 +1802,23 @@ void MainWindow::registerShortcuts()
     sm.registerAction(QStringLiteral("view.focusTransport"), m_actFocusTransport,
                       QKeySequence(QStringLiteral("Ctrl+2")));
     sm.registerAction(QStringLiteral("view.focusMedia"), m_actFocusMedia,
-                      QKeySequence(QStringLiteral("Ctrl+3")));
+                      QKeySequence(QStringLiteral("Ctrl+I")));
     sm.registerAction(QStringLiteral("view.focusEffects"), m_actFocusEffects,
-                      QKeySequence(QStringLiteral("Ctrl+4")));
+                      QKeySequence(QStringLiteral("Ctrl+E")));
     sm.registerAction(QStringLiteral("view.focusProperties"), m_actFocusProperties,
-                      QKeySequence(QStringLiteral("Ctrl+5")));
+                      QKeySequence(QStringLiteral("Ctrl+P")));
     sm.registerAction(QStringLiteral("view.announceContext"),
                       m_actAnnounceContext,
                       QKeySequence(QStringLiteral("Ctrl+Shift+W")));
+    sm.registerAction(QStringLiteral("view.cycleContextVerbosity"),
+                      m_actCycleContextVerbosity,
+                      QKeySequence(QStringLiteral("Ctrl+Shift+V")));
+    sm.registerAction(QStringLiteral("help.announceKeyboardHelp"),
+                      m_actAnnounceShortcuts,
+                      QKeySequence(QStringLiteral("Ctrl+Shift+H")));
+    sm.registerAction(QStringLiteral("timeline.toggleMarkerJumpSnap"),
+                      m_actToggleMarkerJumpSnap,
+                      QKeySequence(QStringLiteral("Ctrl+Shift+J")));
 
     // Track reorder
     sm.registerAction(QStringLiteral("timeline.moveTrackUp"), m_actMoveTrackUp,

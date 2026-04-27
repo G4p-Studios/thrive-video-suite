@@ -41,7 +41,7 @@ TimelineWidget::TimelineWidget(Timeline *timeline,
     setAccessibleName(tr("Timeline"));
     setAccessibleDescription(
         tr("Use Up/Down arrows to navigate tracks, "
-           "Left/Right arrows to navigate clips, and Page Up/Page Down to jump five clips."));
+           "Left/Right arrows to navigate clips, Page Up/Page Down to jump five clips, and M/N for marker navigation."));
     setFocusPolicy(Qt::StrongFocus);
 
     m_statusLabel->setWordWrap(true);
@@ -209,6 +209,39 @@ void TimelineWidget::keyPressEvent(QKeyEvent *event)
     }
 
     case Qt::Key_PageUp: {
+        if (event->modifiers() & Qt::ControlModifier) {
+            const int start = m_timeline->currentTrackIndex();
+            int target = -1;
+            for (int i = start - 1; i >= 0; --i) {
+                auto *candidate = m_timeline->trackAt(i);
+                if (candidate && candidate->clipCount() > 0) {
+                    target = i;
+                    break;
+                }
+            }
+
+            if (target < 0) {
+                m_announcer->announce(
+                    tr("No previous non-empty track."),
+                    Announcer::Priority::Normal);
+                break;
+            }
+
+            m_timeline->setCurrentTrackIndex(target);
+            m_timeline->setCurrentClipIndex(0);
+            auto *targetTrack = m_timeline->trackAt(target);
+            m_announcer->announce(
+                tr("Track %1 of %2: %3, %4 clips.")
+                    .arg(target + 1)
+                    .arg(m_timeline->trackCount())
+                    .arg(targetTrack ? targetTrack->name() : tr("Unknown"))
+                    .arg(targetTrack ? targetTrack->clipCount() : 0),
+                Announcer::Priority::Normal);
+            notifyCellFocus();
+            emit focusedClipChanged();
+            break;
+        }
+
         auto *trk = m_timeline->trackAt(m_timeline->currentTrackIndex());
         if (!trk || trk->clipCount() == 0) {
             m_announcer->announce(tr("No clips on this track."),
@@ -232,6 +265,39 @@ void TimelineWidget::keyPressEvent(QKeyEvent *event)
     }
 
     case Qt::Key_PageDown: {
+        if (event->modifiers() & Qt::ControlModifier) {
+            const int start = m_timeline->currentTrackIndex();
+            int target = -1;
+            for (int i = start + 1; i < m_timeline->trackCount(); ++i) {
+                auto *candidate = m_timeline->trackAt(i);
+                if (candidate && candidate->clipCount() > 0) {
+                    target = i;
+                    break;
+                }
+            }
+
+            if (target < 0) {
+                m_announcer->announce(
+                    tr("No next non-empty track."),
+                    Announcer::Priority::Normal);
+                break;
+            }
+
+            m_timeline->setCurrentTrackIndex(target);
+            m_timeline->setCurrentClipIndex(0);
+            auto *targetTrack = m_timeline->trackAt(target);
+            m_announcer->announce(
+                tr("Track %1 of %2: %3, %4 clips.")
+                    .arg(target + 1)
+                    .arg(m_timeline->trackCount())
+                    .arg(targetTrack ? targetTrack->name() : tr("Unknown"))
+                    .arg(targetTrack ? targetTrack->clipCount() : 0),
+                Announcer::Priority::Normal);
+            notifyCellFocus();
+            emit focusedClipChanged();
+            break;
+        }
+
         auto *trk = m_timeline->trackAt(m_timeline->currentTrackIndex());
         if (!trk || trk->clipCount() == 0) {
             m_announcer->announce(tr("No clips on this track."),
@@ -256,53 +322,118 @@ void TimelineWidget::keyPressEvent(QKeyEvent *event)
 
     case Qt::Key_M: {
         auto posBefore = m_timeline->playheadPosition();
-        m_timeline->navigateNextMarker();
-        if (m_timeline->playheadPosition().frame() != posBefore.frame()) {
-            // Find the marker at the new position
-            for (auto *mk : m_timeline->markers()) {
-                if (mk->position().frame() == m_timeline->playheadPosition().frame()) {
-                    m_announcer->announce(
-                        tr("Marker: %1, %2")
-                            .arg(mk->name(),
-                                 m_timeline->playheadPosition().toString()),
-                        Announcer::Priority::Normal);
-                    break;
-                }
+        Marker *nextMarker = nullptr;
+        for (auto *mk : m_timeline->markers()) {
+            if (posBefore < mk->position()) {
+                if (!nextMarker || mk->position() < nextMarker->position())
+                    nextMarker = mk;
             }
+        }
+
+        if (!nextMarker) {
+            m_announcer->announce(tr("No next marker."),
+                                  Announcer::Priority::Normal);
+            break;
+        }
+
+        const int64_t deltaFrames =
+            nextMarker->position().frame() - posBefore.frame();
+        TimeCode delta(qAbs(deltaFrames), posBefore.fps());
+
+        if (m_markerJumpSnapEnabled) {
+            m_timeline->setPlayheadPosition(nextMarker->position());
+            m_announcer->announce(
+                tr("Marker: %1, %2. Moved forward %3.")
+                    .arg(nextMarker->name(),
+                         nextMarker->position().toString(),
+                         delta.toSpokenString()),
+                Announcer::Priority::Normal);
         } else {
             m_announcer->announce(
-                tr("No next marker."), Announcer::Priority::Normal);
+                tr("Next marker: %1, %2. %3 ahead. Snap is off.")
+                    .arg(nextMarker->name(),
+                         nextMarker->position().toString(),
+                         delta.toSpokenString()),
+                Announcer::Priority::Normal);
         }
         break;
     }
 
     case Qt::Key_N: {
         auto posBefore = m_timeline->playheadPosition();
-        m_timeline->navigatePreviousMarker();
-        if (m_timeline->playheadPosition().frame() != posBefore.frame()) {
-            for (auto *mk : m_timeline->markers()) {
-                if (mk->position().frame() == m_timeline->playheadPosition().frame()) {
-                    m_announcer->announce(
-                        tr("Marker: %1, %2")
-                            .arg(mk->name(),
-                                 m_timeline->playheadPosition().toString()),
-                        Announcer::Priority::Normal);
-                    break;
-                }
+        Marker *prevMarker = nullptr;
+        for (auto *mk : m_timeline->markers()) {
+            if (mk->position() < posBefore) {
+                if (!prevMarker || prevMarker->position() < mk->position())
+                    prevMarker = mk;
             }
+        }
+
+        if (!prevMarker) {
+            m_announcer->announce(tr("No previous marker."),
+                                  Announcer::Priority::Normal);
+            break;
+        }
+
+        const int64_t deltaFrames =
+            posBefore.frame() - prevMarker->position().frame();
+        TimeCode delta(qAbs(deltaFrames), posBefore.fps());
+
+        if (m_markerJumpSnapEnabled) {
+            m_timeline->setPlayheadPosition(prevMarker->position());
+            m_announcer->announce(
+                tr("Marker: %1, %2. Moved backward %3.")
+                    .arg(prevMarker->name(),
+                         prevMarker->position().toString(),
+                         delta.toSpokenString()),
+                Announcer::Priority::Normal);
         } else {
             m_announcer->announce(
-                tr("No previous marker."), Announcer::Priority::Normal);
+                tr("Previous marker: %1, %2. %3 behind. Snap is off.")
+                    .arg(prevMarker->name(),
+                         prevMarker->position().toString(),
+                         delta.toSpokenString()),
+                Announcer::Priority::Normal);
         }
         break;
     }
 
     case Qt::Key_Home:
+        if (event->modifiers() & Qt::ControlModifier) {
+            auto *trk = m_timeline->trackAt(m_timeline->currentTrackIndex());
+            if (!trk || trk->clipCount() == 0) {
+                m_announcer->announce(tr("No clips on this track."),
+                                      Announcer::Priority::Normal);
+                break;
+            }
+            m_timeline->setCurrentClipIndex(0);
+            m_announcer->announce(
+                tr("First clip on current track."),
+                Announcer::Priority::Normal);
+            notifyCellFocus();
+            emit focusedClipChanged();
+            break;
+        }
         m_timeline->setPlayheadPosition(
             TimeCode(0, m_timeline->playheadPosition().fps()));
         break;
 
     case Qt::Key_End: {
+        if (event->modifiers() & Qt::ControlModifier) {
+            auto *trk = m_timeline->trackAt(m_timeline->currentTrackIndex());
+            if (!trk || trk->clipCount() == 0) {
+                m_announcer->announce(tr("No clips on this track."),
+                                      Announcer::Priority::Normal);
+                break;
+            }
+            m_timeline->setCurrentClipIndex(trk->clipCount() - 1);
+            m_announcer->announce(
+                tr("Last clip on current track."),
+                Announcer::Priority::Normal);
+            notifyCellFocus();
+            emit focusedClipChanged();
+            break;
+        }
         auto dur = m_timeline->totalDuration();
         if (dur.frame() > 0)
             m_timeline->setPlayheadPosition(dur);
@@ -345,6 +476,10 @@ void TimelineWidget::focusInEvent(QFocusEvent *event)
         }
         summary += QLatin1Char(' ')
                    + tr("Use Page Up and Page Down to jump five clips.");
+        summary += QLatin1Char(' ')
+                   + tr("Use Control plus Page Up or Control plus Page Down to jump to non-empty tracks.");
+        summary += QLatin1Char(' ')
+                   + tr("Use Control plus Home or Control plus End for first and last clip on track.");
         m_announcer->announce(summary, Announcer::Priority::Normal);
     }
 }

@@ -4,6 +4,7 @@
 #include "preferencesdialog.h"
 #include "shortcuteditor.h"
 #include "pluginmanager.h"
+#include "../app/constants.h"
 #include "../core/project.h"
 #include "../accessibility/announcer.h"
 
@@ -104,6 +105,34 @@ QWidget *PreferencesDialog::createGeneralTab()
     }
     form->addRow(tr("Cue &volume:"), m_audioCueVolume);
 
+    // Context verbosity
+    m_contextVerbosity = new QComboBox(page);
+    m_contextVerbosity->setAccessibleName(tr("Context verbosity"));
+    m_contextVerbosity->addItem(tr("Short"), 0);
+    m_contextVerbosity->addItem(tr("Normal"), 1);
+    m_contextVerbosity->addItem(tr("Detailed"), 2);
+    {
+        QSettings settings;
+        const int savedVerbosity = settings.value(
+            QLatin1String(kSettingsContextVerbosity), 1).toInt();
+        int idxVerbosity = m_contextVerbosity->findData(savedVerbosity);
+        if (idxVerbosity < 0)
+            idxVerbosity = 1;
+        m_contextVerbosity->setCurrentIndex(idxVerbosity);
+    }
+    form->addRow(tr("Context &verbosity:"), m_contextVerbosity);
+
+    // Marker jump snap toggle
+    m_markerJumpSnap = new QCheckBox(
+        tr("Jump playhead when navigating markers"), page);
+    m_markerJumpSnap->setAccessibleName(tr("Marker jump snap"));
+    {
+        QSettings settings;
+        m_markerJumpSnap->setChecked(
+            settings.value(QLatin1String(kSettingsMarkerJumpSnap), true).toBool());
+    }
+    form->addRow(m_markerJumpSnap);
+
     return page;
 }
 
@@ -121,6 +150,8 @@ void PreferencesDialog::onAccepted()
     emit audioCuesEnabledChanged(m_audioCuesEnabled->isChecked());
     emit audioCueVolumeChanged(
         static_cast<float>(m_audioCueVolume->value()) / 100.0f);
+    emit contextVerbosityChanged(m_contextVerbosity->currentData().toInt());
+    emit markerJumpSnapChanged(m_markerJumpSnap->isChecked());
 
     // Persist audio cue settings so they survive restart
     QSettings settings;
@@ -128,6 +159,10 @@ void PreferencesDialog::onAccepted()
                       m_audioCuesEnabled->isChecked());
     settings.setValue(QStringLiteral("audioCues/volume"),
                       m_audioCueVolume->value());
+    settings.setValue(QLatin1String(kSettingsContextVerbosity),
+                      m_contextVerbosity->currentData().toInt());
+    settings.setValue(QLatin1String(kSettingsMarkerJumpSnap),
+                      m_markerJumpSnap->isChecked());
 
     accept();
 }

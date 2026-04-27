@@ -54,6 +54,12 @@ private slots:
     void showAbout();
 
 private:
+    enum class ContextVerbosity {
+        Short,
+        Normal,
+        Detailed
+    };
+
     void createActions();
     void createMenus();
     void createDockWidgets();
@@ -145,6 +151,9 @@ private:
     QAction *m_actFocusTimeline    = nullptr;
     QAction *m_actFocusTransport   = nullptr;
     QAction *m_actAnnounceContext  = nullptr;
+    QAction *m_actAnnounceShortcuts = nullptr;
+    QAction *m_actCycleContextVerbosity = nullptr;
+    QAction *m_actToggleMarkerJumpSnap = nullptr;
 
     // Clip nudge
     QAction *m_actNudgeClipLeft    = nullptr;
@@ -163,6 +172,8 @@ private:
 
     // Recent projects
     QMenu   *m_recentMenu        = nullptr;
+
+    ContextVerbosity m_contextVerbosity = ContextVerbosity::Normal;
 };
 
 } // namespace Thrive

@@ -49,6 +49,9 @@ public:
     /// Access the underlying Timeline model (used by AccessibleTimelineView).
     [[nodiscard]] Timeline *timeline() const { return m_timeline; }
 
+    void setMarkerJumpSnapEnabled(bool enabled) { m_markerJumpSnapEnabled = enabled; }
+    [[nodiscard]] bool markerJumpSnapEnabled() const { return m_markerJumpSnapEnabled; }
+
 signals:
     /// Emitted after every keyboard navigation so that the property
     /// panel (or other listeners) can update.
@@ -74,6 +77,7 @@ private:
     TimelineCanvas      *m_canvas             = nullptr;
     QScrollBar          *m_hScrollBar         = nullptr;
     ThumbnailProvider   *m_thumbs             = nullptr;
+    bool                 m_markerJumpSnapEnabled = true;
     QList<QMetaObject::Connection> m_trackConnections;
 };
 
