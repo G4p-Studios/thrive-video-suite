@@ -112,24 +112,135 @@ resources/          # Audio cue WAV files, .qrc
 
 ## Key Shortcuts
 
+The following tables list the default keyboard shortcuts by editing workflow.
+
+### Transport and Playback
+
 | Action | Shortcut |
 |---|---|
-| Play / Pause | Space, K |
+| Play / Pause | Space |
 | Rewind | J |
+| Stop Transport | K |
 | Fast Forward | L |
 | Step Back 1 Frame | , (comma) |
 | Step Forward 1 Frame | . (period) |
-| Stop | S |
-| Navigate Tracks | Up / Down |
-| Navigate Clips | Left / Right |
+| Go to Timecode | Ctrl+G |
+
+### Timeline Navigation
+
+| Action | Shortcut |
+|---|---|
+| Previous / Next Track | Up / Down |
+| Previous / Next Clip | Left / Right |
+| Jump 5 Clips Back / Forward | Page Up / Page Down |
+| Previous / Next Non-Empty Track | Ctrl+Page Up / Ctrl+Page Down |
+| First / Last Clip on Current Track | Ctrl+Home / Ctrl+End |
+| Timeline Start / End | Home / End |
 | Next / Previous Marker | M / N |
-| Import Media | Ctrl+I |
+
+### Timeline Editing
+
+| Action | Shortcut |
+|---|---|
+| Split Clip at Playhead | S |
+| Add Track | T |
+| Remove Current Track | Shift+Delete |
+| Add Marker at Playhead | Shift+M |
+| Remove Marker at Playhead | Ctrl+Shift+M |
+| Add Transition | Shift+T |
+| Move Clip to Track Above / Below | Shift+Up / Shift+Down |
+| Move Track Up / Down | Alt+Up / Alt+Down |
+| Nudge Clip Left / Right | Ctrl+Left / Ctrl+Right |
+| Toggle Track Mute | Ctrl+M |
+| Toggle Track Lock | Ctrl+Shift+L |
+| Solo Current Track | Ctrl+Shift+O |
+| Toggle Marker Jump Snap | Ctrl+Shift+J |
+
+### Focus and Accessibility
+
+| Action | Shortcut |
+|---|---|
+| Focus Timeline | Ctrl+1 |
+| Focus Transport | Ctrl+2 |
+| Focus Media Browser | Ctrl+I |
+| Focus Effects Browser | Ctrl+E |
+| Focus Properties Panel | Ctrl+P |
+| Announce Current Context | Ctrl+Shift+W |
+| Cycle Context Verbosity (Short, Normal, Detailed) | Ctrl+Shift+V |
+| Announce Keyboard Help | Ctrl+Shift+H |
+
+### File and Edit
+
+| Action | Shortcut |
+|---|---|
+| New Project | Ctrl+N |
+| Open Project | Ctrl+O |
 | Save | Ctrl+S |
+| Save As | Ctrl+Shift+S |
 | Export | Ctrl+Shift+E |
 | Preferences | Ctrl+, |
+| Quit | Ctrl+Q |
 | Undo / Redo | Ctrl+Z / Ctrl+Y |
+| Cut / Copy / Paste / Delete | Ctrl+X / Ctrl+C / Ctrl+V / Delete |
+| Select All | Ctrl+A |
 
-All shortcuts are customisable in **Preferences → Shortcuts**. Key combinations that conflict with screen reader modifiers (Insert, Caps Lock, Scroll Lock) trigger a warning.
+All shortcuts are customisable in **Preferences -> Shortcuts**. Context verbosity and marker jump snap defaults are configurable in **Preferences -> General** and are persisted between sessions.
+
+## Screen Reader Workflow Cheatsheet
+
+This quick guide is for users who are new to editing video with a screen reader.
+
+### 1) Start and Set Orientation
+
+1. Open Preferences with `Ctrl+,` and choose your defaults in **General**.
+2. Set **Context verbosity** to `Normal` or `Detailed` while learning.
+3. Keep **Marker jump snap** enabled at first.
+4. Use `Ctrl+Shift+W` any time to hear your current focus, playhead, and selection.
+5. Use `Ctrl+Shift+H` to hear keyboard help at any point.
+
+### 2) Build the Timeline Quickly
+
+1. Import media from the Media Browser (`Ctrl+I` to focus it).
+2. Move to Timeline with `Ctrl+1`.
+3. Use `Up/Down` to choose track and `Left/Right` to choose clip.
+4. Use `Page Up/Page Down` to jump 5 clips at a time.
+5. Use `Ctrl+Page Up/Ctrl+Page Down` to jump between non-empty tracks.
+
+### 3) Place and Refine Edits
+
+1. Split at playhead with `S`.
+2. Nudge clip timing with `Ctrl+Left/Ctrl+Right`.
+3. Move clips between tracks with `Shift+Up/Shift+Down`.
+4. Add marker at playhead with `Shift+M`.
+5. Remove marker at playhead with `Ctrl+Shift+M`.
+
+### 4) Navigate with Markers
+
+1. Jump to next marker with `M` and previous marker with `N`.
+2. Toggle marker snap with `Ctrl+Shift+J`.
+3. With snap on: playhead moves to marker.
+4. With snap off: marker position is announced without moving playhead.
+
+### 5) Apply Effects and Check Context
+
+1. Focus Effects Browser with `Ctrl+E`.
+2. Focus Properties Panel with `Ctrl+P`.
+3. Press `Ctrl+Shift+W` after each major edit step to verify location and selection.
+4. Cycle verbosity with `Ctrl+Shift+V` if you need shorter or more detailed feedback.
+
+### 6) Review and Export
+
+1. Transport controls: `Space` (play/pause), `J` (rewind), `K` (stop), `L` (forward).
+2. Frame-step with `,` and `.` for precise checks.
+3. Go to exact timecode with `Ctrl+G`.
+4. Export with `Ctrl+Shift+E`.
+
+### Troubleshooting and Recovery
+
+- If you lose track of where you are: press `Ctrl+Shift+W`.
+- If navigation feels too noisy: cycle verbosity with `Ctrl+Shift+V`.
+- If marker jumps are moving playhead unexpectedly: toggle snap with `Ctrl+Shift+J`.
+- If key behavior feels wrong: open **Preferences -> Shortcuts** and check conflicts.
 
 ## Documentation
 
