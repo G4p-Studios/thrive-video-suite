@@ -32,6 +32,8 @@ private slots:
         QVERIFY(m_project->filePath().isEmpty());
         QVERIFY(!m_project->isModified());
         QVERIFY(m_project->timeline() != nullptr);
+        QCOMPARE(m_project->timeline()->trackCount(), 1);
+        QCOMPARE(m_project->timeline()->trackAt(0)->name(), tr("Video 1"));
         QCOMPARE(m_project->fps(), 25.0);
         QCOMPARE(m_project->width(), 1920);
         QCOMPARE(m_project->height(), 1080);
@@ -115,6 +117,8 @@ private slots:
         QCOMPARE(m_project->fps(), 25.0);
         QVERIFY(m_project->scrubAudioEnabled());
         QVERIFY(m_project->timeline() != nullptr);
+        QCOMPARE(m_project->timeline()->trackCount(), 1);
+        QCOMPARE(m_project->timeline()->trackAt(0)->name(), tr("Video 1"));
     }
 
     // ── timeline ownership ──────────────────────────────────────────

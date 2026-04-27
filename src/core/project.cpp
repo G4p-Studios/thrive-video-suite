@@ -82,9 +82,8 @@ void Project::reset()
     }
     m_timeline = new Timeline(this);
 
-    // Create default tracks
+    // Start with a single default video track. Additional tracks can be added as needed.
     m_timeline->addTrack(new Track(tr("Video 1"), Track::Type::Video));
-    m_timeline->addTrack(new Track(tr("Audio 1"), Track::Type::Audio));
 
     emit nameChanged(m_name);
     emit modifiedChanged(false);

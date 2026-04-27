@@ -2230,14 +2230,6 @@ void MainWindow::createDockWidgets()
                         }
                     }
 
-                    if (current && !current->isLocked())
-                        return current;
-
-                    for (auto *candidate : tl->tracks()) {
-                        if (candidate && !candidate->isLocked())
-                            return candidate;
-                    }
-
                     return nullptr;
                 };
 
