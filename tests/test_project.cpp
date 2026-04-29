@@ -5,6 +5,7 @@
 #include <QSignalSpy>
 #include "../src/core/project.h"
 #include "../src/core/timeline.h"
+#include "../src/core/track.h"
 
 using namespace Thrive;
 

@@ -245,7 +245,7 @@ private slots:
         // Create a project with 1 track, 1 marker
         Project srcProject;
         auto *srcTl = srcProject.timeline();
-        // reset() gives us default Video 1 + Audio 1
+        // reset() gives us default Video 1
 
         srcTl->addMarker(new Marker(QStringLiteral("M1"),
                                     TimeCode(0, 25.0)));
@@ -257,8 +257,8 @@ private slots:
         QVERIFY(serializer.load(&srcProject, path));
         QVERIFY(serializer.load(&srcProject, path));
 
-        // Should have exactly 2 tracks and 1 marker (not duplicated)
-        QCOMPARE(srcProject.timeline()->trackCount(), 2);
+        // Should have exactly 1 track and 1 marker (not duplicated)
+        QCOMPARE(srcProject.timeline()->trackCount(), 1);
         QCOMPARE(srcProject.timeline()->markers().size(), 1);
     }
 

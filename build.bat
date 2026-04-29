@@ -79,13 +79,13 @@ set "QT_DIR="
 
 for %%R in (C D E) do (
     for /d %%q in (%%R:\Qt\6.*) do (
-        for /d %%a in ("%%q\msvc*") do (
+        for /d %%a in ("%%q\msvc*_64") do (
             if exist "%%a\bin\qmake.exe" set "QT_DIR=%%a"
         )
     )
 )
 for /d %%q in ("%USERPROFILE%\Qt\6.*") do (
-    for /d %%a in ("%%q\msvc*") do (
+    for /d %%a in ("%%q\msvc*_64") do (
         if exist "%%a\bin\qmake.exe" set "QT_DIR=%%a"
     )
 )
@@ -164,12 +164,14 @@ echo [4/6] Checking MLT Framework 7...
 
 set "MLT_DIR=%DEPS%\mlt"
 set "MLT_LIB=%MLT_DIR%\lib\libmlt-7.lib"
+set "MLTXX_LIB=%MLT_DIR%\lib\libmlt++-7.lib"
 set "MLT_STAMP=%MLT_DIR%\.msvc_ok"
 
 REM Check the library, the MSVC-build stamp, AND the MinGW runtime DLLs.
 REM If any are missing we need to (re-)run setup.
 set "NEED_MLT=0"
 if not exist "%MLT_LIB%" set "NEED_MLT=1"
+if not exist "%MLTXX_LIB%" set "NEED_MLT=1"
 if not exist "%MLT_STAMP%" set "NEED_MLT=1"
 if not exist "%MLT_DIR%\bin\libdl.dll" set "NEED_MLT=1"
 if not exist "%MLT_DIR%\bin\libwinpthread-1.dll" set "NEED_MLT=1"
@@ -178,6 +180,17 @@ REM FFmpeg DLLs — without these MLT cannot decode or play any media
 if not exist "%MLT_DIR%\bin\avformat-62.dll" if not exist "%MLT_DIR%\bin\avformat-61.dll" set "NEED_MLT=1"
 REM MLT module plugins directory
 if not exist "%MLT_DIR%\lib\mlt-7\libmltcore.dll" set "NEED_MLT=1"
+
+REM Backup/restore can leave files present but unreadable due ACL mismatches.
+REM Treat unreadable import libs as missing so setup re-runs automatically.
+if exist "%MLT_LIB%" (
+    copy /b "%MLT_LIB%" nul >nul 2>&1
+    if errorlevel 1 set "NEED_MLT=1"
+)
+if exist "%MLTXX_LIB%" (
+    copy /b "%MLTXX_LIB%" nul >nul 2>&1
+    if errorlevel 1 set "NEED_MLT=1"
+)
 
 REM If runtime DLLs are missing, delete the stamp so setup re-runs fully
 if "!NEED_MLT!"=="1" (
@@ -263,7 +276,13 @@ echo }
 ) > "%SCRIPT_DIR%CMakeUserPresets.json"
 
 set "NEED_CONFIGURE=0"
-if /i "%ACTION%"=="reconfigure" set "NEED_CONFIGURE=1"
+if /i "%ACTION%"=="reconfigure" (
+    set "NEED_CONFIGURE=1"
+    if exist "%BUILD_DIR%" (
+        echo       Reconfigure requested - removing existing build directory...
+        rd /s /q "%BUILD_DIR%"
+    )
+)
 if not exist "%BUILD_DIR%\CMakeCache.txt" set "NEED_CONFIGURE=1"
 
 if "%NEED_CONFIGURE%"=="1" (
