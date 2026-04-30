@@ -561,8 +561,20 @@ void MainWindow::createActions()
     m_actDelete->setShortcut(QKeySequence::Delete);
     m_actSelectAll->setShortcut(QKeySequence::SelectAll);
 
+    auto moveFocusToTimelineIfPropertiesFocused = [this](const QString &message) {
+        QWidget *fw = QApplication::focusWidget();
+        if (!fw || !m_properties || !m_timeline)
+            return;
+        if (fw == m_properties || m_properties->isAncestorOf(fw)) {
+            m_timeline->setFocus();
+            if (!message.isEmpty()) {
+                m_announcer->announce(message, Announcer::Priority::Normal);
+            }
+        }
+    };
+
     // ── Clipboard operations ─────────────────────────────────────────
-    connect(m_actCut, &QAction::triggered, this, [this]() {
+    connect(m_actCut, &QAction::triggered, this, [this, moveFocusToTimelineIfPropertiesFocused]() {
         auto *tl  = m_project->timeline();
         auto *trk = tl->trackAt(tl->currentTrackIndex());
         int   idx = tl->currentClipIndex();
@@ -591,6 +603,8 @@ void MainWindow::createActions()
         m_announcer->announce(
             tr("Cut: %1").arg(clipName),
             Announcer::Priority::Normal);
+        moveFocusToTimelineIfPropertiesFocused(
+            tr("Selection changed. Focus moved to timeline."));
     });
 
     connect(m_actCopy, &QAction::triggered, this, [this]() {
@@ -644,7 +658,7 @@ void MainWindow::createActions()
             Announcer::Priority::Normal);
     });
 
-    connect(m_actDelete, &QAction::triggered, this, [this]() {
+    connect(m_actDelete, &QAction::triggered, this, [this, moveFocusToTimelineIfPropertiesFocused]() {
         auto *tl  = m_project->timeline();
         auto *trk = tl->trackAt(tl->currentTrackIndex());
         int   idx = tl->currentClipIndex();
@@ -668,6 +682,8 @@ void MainWindow::createActions()
         m_announcer->announce(
             tr("Removed %1 from %2.").arg(name, trk->name()),
             Announcer::Priority::High);
+        moveFocusToTimelineIfPropertiesFocused(
+            tr("Selection removed. Focus moved to timeline."));
     });
 
     connect(m_actSelectAll, &QAction::triggered, this, [this]() {
@@ -1347,7 +1363,7 @@ void MainWindow::createActions()
 
     m_actRemoveTrack = new QAction(tr("&Remove Current Track"), this);
     m_actRemoveTrack->setShortcut(QKeySequence(Qt::SHIFT | Qt::Key_Delete));
-    connect(m_actRemoveTrack, &QAction::triggered, this, [this]() {
+    connect(m_actRemoveTrack, &QAction::triggered, this, [this, moveFocusToTimelineIfPropertiesFocused]() {
         auto *tl = m_project->timeline();
         int idx = tl->currentTrackIndex();
         if (idx < 0 || idx >= tl->trackCount()) {
@@ -1359,6 +1375,8 @@ void MainWindow::createActions()
         m_undoStack->push(new RemoveTrackCommand(tl, idx));
         m_announcer->announce(
             tr("Removed %1.").arg(name), Announcer::Priority::High);
+        moveFocusToTimelineIfPropertiesFocused(
+            tr("Track removed. Focus moved to timeline."));
     });
 
     m_actAddMarker = new QAction(tr("Add &Marker at Playhead…"), this);
@@ -2220,7 +2238,19 @@ void MainWindow::createDockWidgets()
             this, [this]() {
                 auto *tl  = m_project->timeline();
                 auto *trk = tl->trackAt(tl->currentTrackIndex());
-                if (!trk) { m_properties->clear(); return; }
+                if (!trk) {
+                    const bool propertiesHadFocus =
+                        (QApplication::focusWidget() == m_properties)
+                        || m_properties->isAncestorOf(QApplication::focusWidget());
+                    m_properties->clear();
+                    if (propertiesHadFocus) {
+                        m_timeline->setFocus();
+                        m_announcer->announce(
+                            tr("No track selected. Focus moved to timeline."),
+                            Announcer::Priority::Normal);
+                    }
+                    return;
+                }
                 int idx = tl->currentClipIndex();
                 if (idx >= 0 && idx < trk->clips().size()) {
                     m_properties->inspectClip(trk->clips().at(idx));
