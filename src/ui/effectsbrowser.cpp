@@ -76,9 +76,11 @@ void EffectsBrowser::populateList(const QString &filter)
 {
     m_list->clear();
 
-    const auto entries = filter.isEmpty()
+    const QString trimmedFilter = filter.trimmed();
+
+    const auto entries = trimmedFilter.isEmpty()
                              ? m_catalog->allEntries()
-                             : m_catalog->search(filter);
+                             : m_catalog->search(trimmedFilter);
 
     for (const auto &entry : entries) {
         auto *item = new QListWidgetItem(entry.displayName, m_list);
@@ -87,9 +89,15 @@ void EffectsBrowser::populateList(const QString &filter)
         item->setToolTip(entry.description);
     }
 
-    m_announcer->announce(
-        tr("%n effect(s) shown.", nullptr, m_list->count()),
-        Announcer::Priority::Low);
+    if (!trimmedFilter.isEmpty() && m_list->count() == 0) {
+        m_announcer->announce(
+            tr("No effects found for %1.").arg(trimmedFilter),
+            Announcer::Priority::Normal);
+    } else {
+        m_announcer->announce(
+            tr("%n effect(s) shown.", nullptr, m_list->count()),
+            Announcer::Priority::Low);
+    }
 }
 
 void EffectsBrowser::onSearchTextChanged(const QString &text)
