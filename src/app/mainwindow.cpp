@@ -1676,6 +1676,10 @@ void MainWindow::createActions()
 
     m_actFocusEffects = new QAction(tr("Focus E&ffects Browser"), this);
     connect(m_actFocusEffects, &QAction::triggered, this, [this]() {
+        if (m_effects) {
+            if (auto *dock = qobject_cast<QDockWidget *>(m_effects->parentWidget()))
+                dock->raise();
+        }
         m_effects->setFocus();
         m_announcer->announce(tr("Effects browser"),
                               Announcer::Priority::Normal);
@@ -1683,6 +1687,10 @@ void MainWindow::createActions()
 
     m_actFocusProperties = new QAction(tr("Focus &Properties Panel"), this);
     connect(m_actFocusProperties, &QAction::triggered, this, [this]() {
+        if (m_properties) {
+            if (auto *dock = qobject_cast<QDockWidget *>(m_properties->parentWidget()))
+                dock->raise();
+        }
         m_properties->setFocus();
         m_announcer->announce(tr("Properties panel"),
                               Announcer::Priority::Normal);
@@ -1700,6 +1708,43 @@ void MainWindow::createActions()
         m_transport->setFocus();
         m_announcer->announce(tr("Transport"),
                               Announcer::Priority::Normal);
+    });
+
+    m_actCyclePanels = new QAction(tr("Cycle Panel &Focus"), this);
+    connect(m_actCyclePanels, &QAction::triggered, this, [this]() {
+        QWidget *fw = QApplication::focusWidget();
+
+        struct PanelEntry {
+            QWidget *panel;
+            QAction *focusAction;
+        };
+
+        const QList<PanelEntry> order = {
+            { m_media, m_actFocusMedia },
+            { m_timeline, m_actFocusTimeline },
+            { m_effects, m_actFocusEffects },
+            { m_properties, m_actFocusProperties },
+            { m_transport, m_actFocusTransport }
+        };
+
+        int currentIndex = -1;
+        for (int i = 0; i < order.size(); ++i) {
+            if (!order.at(i).panel)
+                continue;
+            if (fw == order.at(i).panel || order.at(i).panel->isAncestorOf(fw)) {
+                currentIndex = i;
+                break;
+            }
+        }
+
+        for (int step = 1; step <= order.size(); ++step) {
+            const int idx = (currentIndex + step) % order.size();
+            auto target = order.at(idx);
+            if (!target.panel || !target.focusAction)
+                continue;
+            target.focusAction->trigger();
+            return;
+        }
     });
 
     m_actAnnounceContext = new QAction(tr("Announce Current Conte&xt"), this);
@@ -1842,6 +1887,7 @@ void MainWindow::createActions()
             "Keyboard help. "
             "Space play or pause, J rewind, K stop, L fast forward. "
             "Timeline arrows move tracks and clips. "
+            "F6 cycles focus across major panels. "
             "Page Up and Page Down jump five clips. "
             "Control plus Page Up and Control plus Page Down jump to previous or next non-empty track. "
             "Control plus Home and Control plus End jump to first or last clip on the current track. "
@@ -2054,6 +2100,7 @@ void MainWindow::createMenus()
     viewMenu->addAction(m_actFocusMedia);
     viewMenu->addAction(m_actFocusEffects);
     viewMenu->addAction(m_actFocusProperties);
+    viewMenu->addAction(m_actCyclePanels);
     viewMenu->addSeparator();
     viewMenu->addAction(m_actAnnounceContext);
     viewMenu->addAction(m_actCycleContextVerbosity);
@@ -2140,6 +2187,31 @@ void MainWindow::createDockWidgets()
     // Keep effects browser out of tab order when its dock tab is hidden
     connect(effectsDock, &QDockWidget::visibilityChanged,
             m_effects, &EffectsBrowser::setTabOrderParticipation);
+
+    // Ensure hidden right-side dock widgets cannot retain keyboard focus.
+    auto syncRightDockFocus = [this, propDock, effectsDock]() {
+        QWidget *fw = QApplication::focusWidget();
+        if (!fw)
+            return;
+
+        const bool propVisible = propDock->isVisible();
+        const bool effectsVisible = effectsDock->isVisible();
+
+        if (!propVisible && m_properties->isAncestorOf(fw) && effectsVisible) {
+            m_effects->setFocus();
+            return;
+        }
+
+        if (!effectsVisible && m_effects->isAncestorOf(fw) && propVisible) {
+            m_properties->setFocus();
+        }
+    };
+
+    connect(propDock, &QDockWidget::visibilityChanged,
+            this, [syncRightDockFocus](bool) { syncRightDockFocus(); });
+    connect(effectsDock, &QDockWidget::visibilityChanged,
+            this, [syncRightDockFocus](bool) { syncRightDockFocus(); });
+
     // Start with effects hidden (properties tab is on top after tabify)
     m_effects->setTabOrderParticipation(false);
 
@@ -2459,6 +2531,8 @@ void MainWindow::registerShortcuts()
                       QKeySequence(QStringLiteral("Ctrl+E")));
     sm.registerAction(QStringLiteral("view.focusProperties"), m_actFocusProperties,
                       QKeySequence(QStringLiteral("Ctrl+P")));
+    sm.registerAction(QStringLiteral("view.cyclePanels"), m_actCyclePanels,
+                      QKeySequence(QStringLiteral("F6")));
     sm.registerAction(QStringLiteral("view.announceContext"),
                       m_actAnnounceContext,
                       QKeySequence(QStringLiteral("Ctrl+Shift+W")));

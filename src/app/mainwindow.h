@@ -159,6 +159,7 @@ private:
     QAction *m_actFocusProperties  = nullptr;
     QAction *m_actFocusTimeline    = nullptr;
     QAction *m_actFocusTransport   = nullptr;
+    QAction *m_actCyclePanels      = nullptr;
     QAction *m_actAnnounceContext  = nullptr;
     QAction *m_actAnnounceShortcuts = nullptr;
     QAction *m_actCycleContextVerbosity = nullptr;
