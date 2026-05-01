@@ -94,4 +94,22 @@ StackTemplate StackTemplate::builtInLooneyTunes()
     return t;
 }
 
+StackTemplate StackTemplate::builtInPbs1971()
+{
+    StackTemplate t;
+    t.id = QStringLiteral("builtin.pbs_1971");
+    t.name = QStringLiteral("PBS 1971 Ident");
+    t.description = QStringLiteral("Black background with layered public broadcasting service text phases.");
+    t.captionDefaultText = QStringLiteral("PUBLIC");
+    t.secondaryPhaseName = QStringLiteral("Broadcasting/Service text");
+    t.secondaryDefaultText = QStringLiteral("BROADCASTING SERVICE");
+    t.includeSecondaryByDefault = true;
+    t.totalSeconds = 7.0;
+    t.overlayStartSeconds = 0.7;
+    t.captionStartSeconds = 1.2;
+    t.secondaryStartSeconds = 3.2;
+    t.fadeSeconds = 0.7;
+    return t;
+}
+
 } // namespace Thrive

@@ -33,6 +33,7 @@ struct StackTemplate
                          QString *error = nullptr);
 
     static StackTemplate builtInLooneyTunes();
+    static StackTemplate builtInPbs1971();
 };
 
 } // namespace Thrive

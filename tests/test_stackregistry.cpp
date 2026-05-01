@@ -55,6 +55,10 @@ private slots:
         StackTemplate builtIn;
         QVERIFY(registry.findById(QStringLiteral("builtin.looney_tunes"), &builtIn));
         QCOMPARE(builtIn.name, QStringLiteral("Looney Tunes Intro"));
+
+        StackTemplate pbsBuiltIn;
+        QVERIFY(registry.findById(QStringLiteral("builtin.pbs_1971"), &pbsBuiltIn));
+        QCOMPARE(pbsBuiltIn.name, QStringLiteral("PBS 1971 Ident"));
     }
 
     void saveCustomStackSanitizesId()

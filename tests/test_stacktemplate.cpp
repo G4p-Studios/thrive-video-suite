@@ -18,6 +18,11 @@ private slots:
         QVERIFY(t.isValid());
         QCOMPARE(t.id, QStringLiteral("builtin.looney_tunes"));
         QCOMPARE(t.name, QStringLiteral("Looney Tunes Intro"));
+
+        const StackTemplate p = StackTemplate::builtInPbs1971();
+        QVERIFY(p.isValid());
+        QCOMPARE(p.id, QStringLiteral("builtin.pbs_1971"));
+        QCOMPARE(p.name, QStringLiteral("PBS 1971 Ident"));
     }
 
     void jsonRoundTrip()

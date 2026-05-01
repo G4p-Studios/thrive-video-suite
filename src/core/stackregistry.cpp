@@ -12,7 +12,8 @@
 namespace Thrive {
 
 StackRegistry::StackRegistry()
-    : m_builtin{ StackTemplate::builtInLooneyTunes() }
+    : m_builtin{ StackTemplate::builtInLooneyTunes(),
+                 StackTemplate::builtInPbs1971() }
 {
     reload();
 }
