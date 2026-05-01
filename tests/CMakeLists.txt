@@ -31,6 +31,8 @@ thrive_add_test(test_effect)
 thrive_add_test(test_marker)
 thrive_add_test(test_transition)
 thrive_add_test(test_project)
+thrive_add_test(test_stacktemplate)
+thrive_add_test(test_stackregistry)
 
 # ── command / undo tests ─────────────────────────────────────────────
 thrive_add_test(test_commands)

@@ -14,6 +14,7 @@
 #include "../core/marker.h"
 #include "../core/commands.h"
 #include "../core/projectserializer.h"
+#include "../core/stackregistry.h"
 #include "../core/transition.h"
 #include "../engine/mltengine.h"
 #include "../engine/playbackcontroller.h"
@@ -31,6 +32,7 @@
 #include "../ui/effectsbrowser.h"
 #include "../ui/videopreviewwidget.h"
 #include "../ui/preferencesdialog.h"
+#include "../ui/stackmanagerdialog.h"
 #include "../ui/shortcuteditor.h"
 #include "../ui/exportdialog.h"
 #include "../ui/exportprogressdialog.h"
@@ -746,7 +748,7 @@ void MainWindow::createActions()
             Announcer::Priority::High);
     });
 
-    m_actBuildIntroStack = new QAction(tr("Build &Intro Stack…"), this);
+    m_actBuildIntroStack = new QAction(tr("Add &Stack…"), this);
     connect(m_actBuildIntroStack, &QAction::triggered, this, [this]() {
         auto *tl = m_project->timeline();
         if (!tl) {
@@ -756,16 +758,63 @@ void MainWindow::createActions()
             return;
         }
 
+        StackRegistry stackRegistry;
+        const auto availableStacks = stackRegistry.allStacks();
+        if (availableStacks.isEmpty()) {
+            m_announcer->announce(tr("No stacks available."),
+                                  Announcer::Priority::High);
+            m_cues->play(AudioCueManager::Cue::Error);
+            return;
+        }
+
+        QStringList stackNames;
+        for (const auto &stack : availableStacks)
+            stackNames << stack.name;
+
+        bool chooseOk = false;
+        const QString chosenStackName = QInputDialog::getItem(
+            this,
+            tr("Add Stack"),
+            tr("Stack template:"),
+            stackNames,
+            0,
+            false,
+            &chooseOk);
+        if (!chooseOk || chosenStackName.isEmpty())
+            return;
+
+        StackTemplate selectedStack;
+        bool foundStack = false;
+        for (const auto &stack : availableStacks) {
+            if (stack.name == chosenStackName) {
+                selectedStack = stack;
+                foundStack = true;
+                break;
+            }
+        }
+        if (!foundStack) {
+            m_announcer->announce(tr("Selected stack template is invalid."),
+                                  Announcer::Priority::High);
+            m_cues->play(AudioCueManager::Cue::Error);
+            return;
+        }
+
         const QString visualFilter =
             tr("Visual Media (*.png *.jpg *.jpeg *.bmp *.webp *.gif *.mp4 *.mov *.mkv *.avi);;All Files (*)");
 
         const QString ringsPath = QFileDialog::getOpenFileName(
-            this, tr("Select Rings Background"), QString(), visualFilter);
+            this,
+            tr("Select Background for %1").arg(selectedStack.name),
+            QString(),
+            visualFilter);
         if (ringsPath.isEmpty())
             return;
 
         const QString shieldPath = QFileDialog::getOpenFileName(
-            this, tr("Select Shield Overlay"), QString(), visualFilter);
+            this,
+            tr("Select Overlay for %1").arg(selectedStack.name),
+            QString(),
+            visualFilter);
         if (shieldPath.isEmpty())
             return;
 
@@ -775,7 +824,7 @@ void MainWindow::createActions()
             tr("Caption Text"),
             tr("Caption text above shield (leave empty to skip):"),
             QLineEdit::Normal,
-            tr("WARNER BROS."),
+            selectedStack.captionDefaultText,
             &captionOk);
         if (!captionOk)
             return;
@@ -783,20 +832,23 @@ void MainWindow::createActions()
         const bool includeLooney =
             QMessageBox::question(
                 this,
-                tr("Include Looney Text"),
-                tr("Add Looney text phase after shield and caption fade out?"),
+                tr("Include %1").arg(selectedStack.secondaryPhaseName),
+                tr("Add %1 phase after overlay and caption fade out?")
+                    .arg(selectedStack.secondaryPhaseName),
                 QMessageBox::Yes | QMessageBox::No,
-                QMessageBox::Yes) == QMessageBox::Yes;
+                selectedStack.includeSecondaryByDefault
+                    ? QMessageBox::Yes
+                    : QMessageBox::No) == QMessageBox::Yes;
 
         QString looneyText;
         if (includeLooney) {
             bool looneyOk = false;
             looneyText = QInputDialog::getText(
                 this,
-                tr("Looney Text"),
-                tr("Looney text content:"),
+                selectedStack.secondaryPhaseName,
+                tr("%1 content:").arg(selectedStack.secondaryPhaseName),
                 QLineEdit::Normal,
-                tr("LOONEY TUNES"),
+                selectedStack.secondaryDefaultText,
                 &looneyOk);
             if (!looneyOk)
                 return;
@@ -806,30 +858,31 @@ void MainWindow::createActions()
         const double totalSeconds = QInputDialog::getDouble(
             this, tr("Intro Duration"),
             tr("Total intro length in seconds:"),
-            6.0, 1.0, 60.0, 1, &ok);
+            selectedStack.totalSeconds, 1.0, 60.0, 1, &ok);
         if (!ok)
             return;
 
         const double shieldInSeconds = QInputDialog::getDouble(
             this, tr("Shield In Time"),
             tr("Shield start time in seconds:"),
-            0.6, 0.0, totalSeconds, 1, &ok);
+            selectedStack.overlayStartSeconds, 0.0, totalSeconds, 1, &ok);
         if (!ok)
             return;
 
         const double captionInSeconds = QInputDialog::getDouble(
             this, tr("Caption In Time"),
             tr("Caption start time in seconds:"),
-            1.2, 0.0, totalSeconds, 1, &ok);
+            selectedStack.captionStartSeconds, 0.0, totalSeconds, 1, &ok);
         if (!ok)
             return;
 
         double replaceSeconds = totalSeconds;
         if (includeLooney) {
             replaceSeconds = QInputDialog::getDouble(
-                this, tr("Looney Text Start"),
-                tr("Looney text start time in seconds:"),
-                3.5, 0.0, totalSeconds, 1, &ok);
+                this,
+                tr("%1 Start").arg(selectedStack.secondaryPhaseName),
+                tr("%1 start time in seconds:").arg(selectedStack.secondaryPhaseName),
+                selectedStack.secondaryStartSeconds, 0.0, totalSeconds, 1, &ok);
             if (!ok)
                 return;
         }
@@ -837,7 +890,7 @@ void MainWindow::createActions()
         const double fadeSeconds = QInputDialog::getDouble(
             this, tr("Fade Duration"),
             tr("Fade duration in seconds:"),
-            0.8, 0.1, 10.0, 1, &ok);
+            selectedStack.fadeSeconds, 0.1, 10.0, 1, &ok);
         if (!ok)
             return;
 
@@ -855,12 +908,13 @@ void MainWindow::createActions()
             "Shield starts at %3 seconds. "
             "Caption starts at %4 seconds. "
             "Fade duration %5 seconds. "
-            "Looney text phase %6.")
+            "%6 phase %7.")
             .arg(TimeCode(baseStart, fps).toSpokenString())
             .arg(totalSeconds, 0, 'f', 1)
             .arg(shieldInSeconds, 0, 'f', 1)
             .arg(captionInSeconds, 0, 'f', 1)
             .arg(fadeSeconds, 0, 'f', 1)
+            .arg(selectedStack.secondaryPhaseName)
             .arg(includeLooney
                 ? tr("enabled at %1 seconds").arg(replaceSeconds, 0, 'f', 1)
                 : tr("disabled"));
@@ -878,12 +932,12 @@ void MainWindow::createActions()
         } else {
             QMessageBox::information(
                 this,
-                tr("Intro Stack Dry Run"),
+                tr("Stack Dry Run"),
                 dryRunSummary);
             const auto answer = QMessageBox::question(
                 this,
-                tr("Build Intro Stack"),
-                tr("Apply this intro stack now?"),
+                tr("Add Stack"),
+                tr("Apply this stack now?"),
                 QMessageBox::Yes | QMessageBox::No,
                 QMessageBox::Yes);
             if (answer != QMessageBox::Yes)
@@ -994,7 +1048,7 @@ void MainWindow::createActions()
             fx->setParameterValue(id, value);
         };
 
-        m_undoStack->beginMacro(tr("Build intro stack"));
+        m_undoStack->beginMacro(tr("Add stack"));
 
         auto *ringsTrack = ensureVideoTrack(tr("Rings"));
         auto *shieldTrack = ensureVideoTrack(tr("Shield"));
@@ -1073,9 +1127,17 @@ void MainWindow::createActions()
         m_timeline->refresh();
         m_announcer->announce(
             includeLooney
-                ? tr("Intro stack created with rings, shield, caption, and Looney text.")
-                : tr("Intro stack created with rings, shield, and caption."),
+                ? tr("%1 created with background, overlay, caption, and %2.")
+                    .arg(selectedStack.name, selectedStack.secondaryPhaseName)
+                : tr("%1 created with background, overlay, and caption.")
+                    .arg(selectedStack.name),
             Announcer::Priority::High);
+    });
+
+    m_actStackManager = new QAction(tr("Stack &Manager…"), this);
+    connect(m_actStackManager, &QAction::triggered, this, [this]() {
+        StackManagerDialog dlg(m_announcer, this);
+        dlg.exec();
     });
 
     m_actAddTextClip = new QAction(tr("Add Te&xt Overlay Clip…"), this);
@@ -2079,6 +2141,7 @@ void MainWindow::createMenus()
     timelineMenu->addAction(m_actAddTrack);
     timelineMenu->addAction(m_actRemoveTrack);
     timelineMenu->addAction(m_actBuildIntroStack);
+    timelineMenu->addAction(m_actStackManager);
     timelineMenu->addAction(m_actAddTextClip);
     timelineMenu->addAction(m_actApplyAvatarPreset);
     timelineMenu->addSeparator();
@@ -2523,6 +2586,8 @@ void MainWindow::registerShortcuts()
                       QKeySequence(QStringLiteral("Shift+Delete")));
     sm.registerAction(QStringLiteral("timeline.buildIntroStack"), m_actBuildIntroStack,
                       QKeySequence(QStringLiteral("Ctrl+Shift+B")));
+    sm.registerAction(QStringLiteral("timeline.stackManager"), m_actStackManager,
+                      QKeySequence());
     sm.registerAction(QStringLiteral("timeline.addTextClip"), m_actAddTextClip,
                       QKeySequence(QStringLiteral("Ctrl+Shift+T")));
     sm.registerAction(QStringLiteral("timeline.applyAvatarPreset"), m_actApplyAvatarPreset,

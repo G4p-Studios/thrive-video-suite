@@ -135,6 +135,7 @@ private:
     QAction *m_actAddTrack       = nullptr;
     QAction *m_actRemoveTrack    = nullptr;
     QAction *m_actBuildIntroStack = nullptr;
+    QAction *m_actStackManager   = nullptr;
     QAction *m_actAddTextClip    = nullptr;
     QAction *m_actApplyAvatarPreset = nullptr;
     QAction *m_actAddMarker      = nullptr;

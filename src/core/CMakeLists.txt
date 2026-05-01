@@ -11,6 +11,8 @@ qt_add_library(thrive-core STATIC
     timecode.h          timecode.cpp
     project.h           project.cpp
     projectserializer.h projectserializer.cpp
+    stacktemplate.h     stacktemplate.cpp
+    stackregistry.h     stackregistry.cpp
     commands.h          commands.cpp
 )
 

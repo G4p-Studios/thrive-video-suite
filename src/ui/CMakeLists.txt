@@ -10,6 +10,7 @@ qt_add_library(thrive-ui STATIC
     mediabrowser.h          mediabrowser.cpp
     propertiespanel.h       propertiespanel.cpp
     effectsbrowser.h        effectsbrowser.cpp
+    stackmanagerdialog.h    stackmanagerdialog.cpp
     preferencesdialog.h     preferencesdialog.cpp
     shortcuteditor.h        shortcuteditor.cpp
     pluginmanager.h         pluginmanager.cpp
