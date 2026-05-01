@@ -15,6 +15,8 @@ bool StackTemplate::isValid() const
         && overlayStartSeconds >= 0.0
         && captionStartSeconds >= 0.0
         && secondaryStartSeconds >= 0.0
+        && audioStartSeconds >= 0.0
+        && audioStartSeconds <= totalSeconds
         && fadeSeconds > 0.0;
 }
 
@@ -28,10 +30,12 @@ QJsonObject StackTemplate::toJson() const
     obj.insert(QStringLiteral("secondaryPhaseName"), secondaryPhaseName);
     obj.insert(QStringLiteral("secondaryDefaultText"), secondaryDefaultText);
     obj.insert(QStringLiteral("includeSecondaryByDefault"), includeSecondaryByDefault);
+    obj.insert(QStringLiteral("includeAudioByDefault"), includeAudioByDefault);
     obj.insert(QStringLiteral("totalSeconds"), totalSeconds);
     obj.insert(QStringLiteral("overlayStartSeconds"), overlayStartSeconds);
     obj.insert(QStringLiteral("captionStartSeconds"), captionStartSeconds);
     obj.insert(QStringLiteral("secondaryStartSeconds"), secondaryStartSeconds);
+    obj.insert(QStringLiteral("audioStartSeconds"), audioStartSeconds);
     obj.insert(QStringLiteral("fadeSeconds"), fadeSeconds);
     return obj;
 }
@@ -59,11 +63,14 @@ bool StackTemplate::fromJson(const QJsonObject &obj,
                                  .toString(QStringLiteral("LOONEY TUNES"));
     t.includeSecondaryByDefault = obj.value(QStringLiteral("includeSecondaryByDefault"))
                                       .toBool(true);
+    t.includeAudioByDefault = obj.value(QStringLiteral("includeAudioByDefault"))
+                                  .toBool(false);
 
     t.totalSeconds = obj.value(QStringLiteral("totalSeconds")).toDouble(6.0);
     t.overlayStartSeconds = obj.value(QStringLiteral("overlayStartSeconds")).toDouble(0.6);
     t.captionStartSeconds = obj.value(QStringLiteral("captionStartSeconds")).toDouble(1.2);
     t.secondaryStartSeconds = obj.value(QStringLiteral("secondaryStartSeconds")).toDouble(3.5);
+    t.audioStartSeconds = obj.value(QStringLiteral("audioStartSeconds")).toDouble(0.0);
     t.fadeSeconds = obj.value(QStringLiteral("fadeSeconds")).toDouble(0.8);
 
     if (!t.isValid()) {
@@ -86,10 +93,12 @@ StackTemplate StackTemplate::builtInLooneyTunes()
     t.secondaryPhaseName = QStringLiteral("Looney text");
     t.secondaryDefaultText = QStringLiteral("LOONEY TUNES");
     t.includeSecondaryByDefault = true;
+    t.includeAudioByDefault = true;
     t.totalSeconds = 6.0;
     t.overlayStartSeconds = 0.6;
     t.captionStartSeconds = 1.2;
     t.secondaryStartSeconds = 3.5;
+    t.audioStartSeconds = 0.0;
     t.fadeSeconds = 0.8;
     return t;
 }
@@ -104,10 +113,12 @@ StackTemplate StackTemplate::builtInPbs1971()
     t.secondaryPhaseName = QStringLiteral("Broadcasting/Service text");
     t.secondaryDefaultText = QStringLiteral("BROADCASTING SERVICE");
     t.includeSecondaryByDefault = true;
+    t.includeAudioByDefault = true;
     t.totalSeconds = 7.0;
     t.overlayStartSeconds = 0.7;
     t.captionStartSeconds = 1.2;
     t.secondaryStartSeconds = 3.2;
+    t.audioStartSeconds = 0.7;
     t.fadeSeconds = 0.7;
     return t;
 }
@@ -122,10 +133,12 @@ StackTemplate StackTemplate::builtInPbs1984()
     t.secondaryPhaseName = QStringLiteral("Secondary text");
     t.secondaryDefaultText = QStringLiteral("PBS");
     t.includeSecondaryByDefault = false;
+    t.includeAudioByDefault = true;
     t.totalSeconds = 4.0;
     t.overlayStartSeconds = 0.4;
     t.captionStartSeconds = 1.4;
     t.secondaryStartSeconds = 2.8;
+    t.audioStartSeconds = 0.0;
     t.fadeSeconds = 0.5;
     return t;
 }

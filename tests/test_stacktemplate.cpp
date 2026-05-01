@@ -18,16 +18,22 @@ private slots:
         QVERIFY(t.isValid());
         QCOMPARE(t.id, QStringLiteral("builtin.looney_tunes"));
         QCOMPARE(t.name, QStringLiteral("Looney Tunes Intro"));
+        QVERIFY(t.includeAudioByDefault);
+        QCOMPARE(t.audioStartSeconds, 0.0);
 
         const StackTemplate p = StackTemplate::builtInPbs1971();
         QVERIFY(p.isValid());
         QCOMPARE(p.id, QStringLiteral("builtin.pbs_1971"));
         QCOMPARE(p.name, QStringLiteral("PBS 1971 Ident"));
+        QVERIFY(p.includeAudioByDefault);
+        QCOMPARE(p.audioStartSeconds, 0.7);
 
         const StackTemplate p84 = StackTemplate::builtInPbs1984();
         QVERIFY(p84.isValid());
         QCOMPARE(p84.id, QStringLiteral("builtin.pbs_1984"));
         QCOMPARE(p84.name, QStringLiteral("PBS 1984 Ident"));
+        QVERIFY(p84.includeAudioByDefault);
+        QCOMPARE(p84.audioStartSeconds, 0.0);
     }
 
     void jsonRoundTrip()
@@ -40,10 +46,12 @@ private slots:
         src.secondaryPhaseName = QStringLiteral("Second phase");
         src.secondaryDefaultText = QStringLiteral("SECOND");
         src.includeSecondaryByDefault = false;
+        src.includeAudioByDefault = true;
         src.totalSeconds = 8.0;
         src.overlayStartSeconds = 1.0;
         src.captionStartSeconds = 1.5;
         src.secondaryStartSeconds = 5.0;
+        src.audioStartSeconds = 2.0;
         src.fadeSeconds = 0.7;
 
         StackTemplate dst;
@@ -58,10 +66,12 @@ private slots:
         QCOMPARE(dst.secondaryPhaseName, src.secondaryPhaseName);
         QCOMPARE(dst.secondaryDefaultText, src.secondaryDefaultText);
         QCOMPARE(dst.includeSecondaryByDefault, src.includeSecondaryByDefault);
+        QCOMPARE(dst.includeAudioByDefault, src.includeAudioByDefault);
         QCOMPARE(dst.totalSeconds, src.totalSeconds);
         QCOMPARE(dst.overlayStartSeconds, src.overlayStartSeconds);
         QCOMPARE(dst.captionStartSeconds, src.captionStartSeconds);
         QCOMPARE(dst.secondaryStartSeconds, src.secondaryStartSeconds);
+        QCOMPARE(dst.audioStartSeconds, src.audioStartSeconds);
         QCOMPARE(dst.fadeSeconds, src.fadeSeconds);
     }
 
@@ -74,6 +84,7 @@ private slots:
         bad.insert(QStringLiteral("id"), QStringLiteral("custom.bad"));
         bad.insert(QStringLiteral("name"), QStringLiteral("Bad"));
         bad.insert(QStringLiteral("totalSeconds"), 0.0);
+        bad.insert(QStringLiteral("audioStartSeconds"), 2.0);
 
         QVERIFY(!StackTemplate::fromJson(bad, &out, &error));
         QVERIFY(!error.isEmpty());

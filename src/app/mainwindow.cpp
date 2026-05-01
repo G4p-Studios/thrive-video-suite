@@ -894,12 +894,45 @@ void MainWindow::createActions()
         if (!ok)
             return;
 
+        const bool includeSoundtrack =
+            QMessageBox::question(
+                this,
+                tr("Include Soundtrack"),
+                tr("Add soundtrack audio for this stack?"),
+                QMessageBox::Yes | QMessageBox::No,
+                selectedStack.includeAudioByDefault
+                    ? QMessageBox::Yes
+                    : QMessageBox::No) == QMessageBox::Yes;
+
+        QString soundtrackPath;
+        double soundtrackStartSeconds = selectedStack.audioStartSeconds;
+        if (includeSoundtrack) {
+            const QString audioFilter = tr(
+                "Audio Media (*.wav *.mp3 *.flac *.ogg *.m4a *.aac *.wma *.aiff);;All Files (*)");
+            soundtrackPath = QFileDialog::getOpenFileName(
+                this,
+                tr("Select Soundtrack for %1").arg(selectedStack.name),
+                QString(),
+                audioFilter);
+            if (soundtrackPath.isEmpty())
+                return;
+
+            soundtrackStartSeconds = QInputDialog::getDouble(
+                this,
+                tr("Soundtrack Start"),
+                tr("Soundtrack start time in seconds:"),
+                selectedStack.audioStartSeconds, 0.0, totalSeconds, 1, &ok);
+            if (!ok)
+                return;
+        }
+
         const double fps = m_project->fps();
         const int64_t baseStart = tl->playheadPosition().frame();
         const int64_t totalFrames = qMax<int64_t>(1, static_cast<int64_t>(totalSeconds * fps));
         const int64_t shieldStart = qMax<int64_t>(0, static_cast<int64_t>(shieldInSeconds * fps));
         const int64_t captionStart = qMax<int64_t>(0, static_cast<int64_t>(captionInSeconds * fps));
         const int64_t replaceStart = qMax<int64_t>(0, static_cast<int64_t>(replaceSeconds * fps));
+        const int64_t soundtrackStart = qMax<int64_t>(0, static_cast<int64_t>(soundtrackStartSeconds * fps));
         const int64_t fadeFrames = qMax<int64_t>(1, static_cast<int64_t>(fadeSeconds * fps));
 
         const QString dryRunSummary = tr(
@@ -908,7 +941,8 @@ void MainWindow::createActions()
             "Shield starts at %3 seconds. "
             "Caption starts at %4 seconds. "
             "Fade duration %5 seconds. "
-            "%6 phase %7.")
+            "%6 phase %7. "
+            "Soundtrack %8.")
             .arg(TimeCode(baseStart, fps).toSpokenString())
             .arg(totalSeconds, 0, 'f', 1)
             .arg(shieldInSeconds, 0, 'f', 1)
@@ -917,6 +951,9 @@ void MainWindow::createActions()
             .arg(selectedStack.secondaryPhaseName)
             .arg(includeLooney
                 ? tr("enabled at %1 seconds").arg(replaceSeconds, 0, 'f', 1)
+                : tr("disabled"))
+            .arg(includeSoundtrack
+                ? tr("enabled at %1 seconds").arg(soundtrackStartSeconds, 0, 'f', 1)
                 : tr("disabled"));
 
         const bool screenReaderActive = ScreenReader::instance().isScreenReaderActive();
@@ -946,6 +983,12 @@ void MainWindow::createActions()
 
         auto ensureVideoTrack = [this, tl](const QString &baseName) -> Track * {
             auto *track = new Track(baseName, Track::Type::Video);
+            m_undoStack->push(new AddTrackCommand(tl, track));
+            return track;
+        };
+
+        auto ensureAudioTrack = [this, tl](const QString &baseName) -> Track * {
+            auto *track = new Track(baseName, Track::Type::Audio);
             m_undoStack->push(new AddTrackCommand(tl, track));
             return track;
         };
@@ -1056,6 +1099,8 @@ void MainWindow::createActions()
             ? nullptr : ensureVideoTrack(tr("Caption"));
         auto *looneyTrack = includeLooney
             ? ensureVideoTrack(tr("Looney Text")) : nullptr;
+        auto *audioTrack = includeSoundtrack
+            ? ensureAudioTrack(tr("Logo Soundtrack")) : nullptr;
 
         auto *ringsClip = addClip(ringsTrack, tr("Rings"), ringsPath,
                                   0, totalFrames);
@@ -1120,17 +1165,35 @@ void MainWindow::createActions()
             }
         }
 
+        if (includeSoundtrack && audioTrack && !soundtrackPath.isEmpty()) {
+            const int64_t remainingFrames = qMax<int64_t>(1, totalFrames - soundtrackStart);
+            const int64_t soundtrackFrames = qMax<int64_t>(
+                1,
+                qMin<int64_t>(
+                    probeMediaLengthFrames(soundtrackPath,
+                                           static_cast<int>(remainingFrames)),
+                    remainingFrames));
+            addClip(audioTrack, tr("Soundtrack"), soundtrackPath,
+                    soundtrackStart, soundtrackFrames);
+        }
+
         m_undoStack->endMacro();
 
         m_modified = true;
         deferRebuildTractor();
         m_timeline->refresh();
         m_announcer->announce(
-            includeLooney
-                ? tr("%1 created with background, overlay, caption, and %2.")
-                    .arg(selectedStack.name, selectedStack.secondaryPhaseName)
-                : tr("%1 created with background, overlay, and caption.")
-                    .arg(selectedStack.name),
+            includeSoundtrack
+                ? (includeLooney
+                    ? tr("%1 created with background, overlay, caption, %2, and soundtrack.")
+                        .arg(selectedStack.name, selectedStack.secondaryPhaseName)
+                    : tr("%1 created with background, overlay, caption, and soundtrack.")
+                        .arg(selectedStack.name))
+                : (includeLooney
+                    ? tr("%1 created with background, overlay, caption, and %2.")
+                        .arg(selectedStack.name, selectedStack.secondaryPhaseName)
+                    : tr("%1 created with background, overlay, and caption.")
+                        .arg(selectedStack.name)),
             Announcer::Priority::High);
     });
 

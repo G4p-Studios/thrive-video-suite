@@ -132,6 +132,20 @@ void StackManagerDialog::onCreate()
     if (!ok)
         return;
 
+    const auto includeAudio = QMessageBox::question(
+        this,
+        tr("Default Soundtrack"),
+        tr("Include soundtrack by default when this stack is added?"),
+        QMessageBox::Yes | QMessageBox::No,
+        QMessageBox::No);
+    stack.includeAudioByDefault = includeAudio == QMessageBox::Yes;
+
+    stack.audioStartSeconds = QInputDialog::getDouble(
+        this, tr("Soundtrack Start"), tr("Default soundtrack start (seconds):"),
+        0.0, 0.0, stack.totalSeconds, 1, &ok);
+    if (!ok)
+        return;
+
     QString error;
     if (!m_registry.saveCustomStack(stack, &error)) {
         QMessageBox::warning(this, tr("Create Stack"), error);

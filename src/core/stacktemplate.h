@@ -18,11 +18,13 @@ struct StackTemplate
     QString secondaryPhaseName;
     QString secondaryDefaultText;
     bool includeSecondaryByDefault = true;
+    bool includeAudioByDefault = false;
 
     double totalSeconds = 6.0;
     double overlayStartSeconds = 0.6;
     double captionStartSeconds = 1.2;
     double secondaryStartSeconds = 3.5;
+    double audioStartSeconds = 0.0;
     double fadeSeconds = 0.8;
 
     bool isValid() const;
