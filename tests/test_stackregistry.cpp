@@ -59,6 +59,10 @@ private slots:
         StackTemplate pbsBuiltIn;
         QVERIFY(registry.findById(QStringLiteral("builtin.pbs_1971"), &pbsBuiltIn));
         QCOMPARE(pbsBuiltIn.name, QStringLiteral("PBS 1971 Ident"));
+
+        StackTemplate pbs1984BuiltIn;
+        QVERIFY(registry.findById(QStringLiteral("builtin.pbs_1984"), &pbs1984BuiltIn));
+        QCOMPARE(pbs1984BuiltIn.name, QStringLiteral("PBS 1984 Ident"));
     }
 
     void saveCustomStackSanitizesId()

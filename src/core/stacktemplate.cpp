@@ -112,4 +112,22 @@ StackTemplate StackTemplate::builtInPbs1971()
     return t;
 }
 
+StackTemplate StackTemplate::builtInPbs1984()
+{
+    StackTemplate t;
+    t.id = QStringLiteral("builtin.pbs_1984");
+    t.name = QStringLiteral("PBS 1984 Ident");
+    t.description = QStringLiteral("Black background with right-facing P-head, separated piece, and PBS wordmark.");
+    t.captionDefaultText = QStringLiteral("PBS");
+    t.secondaryPhaseName = QStringLiteral("Secondary text");
+    t.secondaryDefaultText = QStringLiteral("PBS");
+    t.includeSecondaryByDefault = false;
+    t.totalSeconds = 4.0;
+    t.overlayStartSeconds = 0.4;
+    t.captionStartSeconds = 1.4;
+    t.secondaryStartSeconds = 2.8;
+    t.fadeSeconds = 0.5;
+    return t;
+}
+
 } // namespace Thrive

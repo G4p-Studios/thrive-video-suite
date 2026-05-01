@@ -34,6 +34,7 @@ struct StackTemplate
 
     static StackTemplate builtInLooneyTunes();
     static StackTemplate builtInPbs1971();
+    static StackTemplate builtInPbs1984();
 };
 
 } // namespace Thrive
