@@ -9,14 +9,33 @@ A **fully accessible non-linear video editor** built for blind and visually impa
 - **Full screen reader integration** via [Prism](https://github.com/ethindp/prism) — works with NVDA, JAWS, Narrator, Orca, VoiceOver, and SAPI
 - **Audio cues** — short tones at clip boundaries, gaps, and track edges
 - **Keyboard-first design** — every function is reachable without a mouse
+- **Reusable stack templates** — built-in and custom logo/intro presets with import/export via `.tstk`
+- **Stack Manager** — create, import, export, and remove custom stack templates
+- **Built-in logo presets** — Looney Tunes Intro, PBS 1971 Ident, PBS 1984 Ident
+- **Optional stack soundtrack** — add logo audio with per-template default start offset on a dedicated audio track
 - **J-K-L transport** — industry-standard playback speed control
 - **Accessible timeline** — exposed as a table to screen readers (QAccessibleTableInterface)
 - **Effect browser** — searchable with spoken descriptions for every effect
 - **Customisable shortcuts** — with automatic screen reader key-conflict detection
+- **Panel focus cycling** — F6 cycles timeline, transport, media, effects, and properties panels
 - **Welcome wizard** — guided onboarding narrated page by page
 - **Plugin support** — install/remove with app-restart activation flow
 - **`.tvs` project format** — ZIP container (MLT XML + metadata.json)
 - **i18n ready** — full `tr()` infrastructure from day one
+
+## Stack Templates and Logo Workflows
+
+Thrive Video Suite includes a full stack-template workflow designed for quickly building reusable logo and intro sequences.
+
+- **Add Stack** (`Ctrl+Shift+B`) applies a selected template to the timeline.
+- **Stack Manager** (Timeline menu, unassigned by default) manages custom templates.
+- **Template format**: `.tstk` (JSON-backed stack presets).
+- **Built-in templates**:
+  - Looney Tunes Intro
+  - PBS 1971 Ident
+  - PBS 1984 Ident
+
+When adding a stack, you can optionally include a soundtrack. If enabled, Thrive prompts for audio media and a start offset, then places the soundtrack on a dedicated **Logo Soundtrack** audio track.
 
 ## Technology
 
@@ -69,7 +88,7 @@ If you prefer to configure CMake yourself:
 
 ```bash
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo ^
-    -DCMAKE_PREFIX_PATH="C:\Qt\6.10.2\msvc2022_64" ^
+  -DCMAKE_PREFIX_PATH="C:\Qt\6.11.0\msvc2022_64" ^
     -DCMAKE_TOOLCHAIN_FILE="C:\dev\thrive-deps\vcpkg\scripts\buildsystems\vcpkg.cmake"
 cmake --build build
 cd build && ctest --output-on-failure
@@ -89,6 +108,8 @@ Each test is a separate executable:
 | `test_effect` | Properties, parameters, enable/disable, accessible summary |
 | `test_marker` | Properties, signal emission, accessible summary |
 | `test_project` | Defaults, resolution, FPS, scrub audio, reset |
+| `test_stacktemplate` | Built-in template defaults, JSON round-trip, validation |
+| `test_stackregistry` | Built-in availability, custom save/import/export/delete |
 | `test_commands` | All 11 undo commands: redo → undo → re-redo + compound stacks |
 | `test_announcer` | Enable/disable, queue, timer-drain |
 
@@ -145,7 +166,8 @@ The following tables list the default keyboard shortcuts by editing workflow.
 | Split Clip at Playhead | S |
 | Add Track | T |
 | Remove Current Track | Shift+Delete |
-| Build Intro Stack | Ctrl+Shift+B |
+| Add Stack | Ctrl+Shift+B |
+| Stack Manager | Unassigned by default |
 | Add Text Overlay Clip | Ctrl+Shift+T |
 | Apply Motion Preset | Ctrl+Shift+P |
 | Add Marker at Playhead | Shift+M |
@@ -168,6 +190,7 @@ The following tables list the default keyboard shortcuts by editing workflow.
 | Focus Media Browser | Ctrl+I |
 | Focus Effects Browser | Ctrl+E |
 | Focus Properties Panel | Ctrl+P |
+| Cycle Panel Focus | F6 |
 | Announce Current Context | Ctrl+Shift+W |
 | Cycle Context Verbosity (Short, Normal, Detailed) | Ctrl+Shift+V |
 | Announce Keyboard Help | Ctrl+Shift+H |
@@ -204,12 +227,13 @@ This quick guide is for users who are new to editing video with a screen reader.
 
 ### 2) Build the Timeline Quickly
 
-1. For intro-style overlays, use `Ctrl+Shift+B` (**Build Intro Stack**) to create rings/shield/caption timing scaffolding.
-2. Import media from the Media Browser (`Ctrl+I` to focus it).
-3. Move to Timeline with `Ctrl+1`.
-4. Use `Up/Down` to choose track and `Left/Right` to choose clip.
-5. Use `Page Up/Page Down` to jump 5 clips at a time.
-6. Use `Ctrl+Page Up/Ctrl+Page Down` to jump between non-empty tracks.
+1. For logo and intro presets, use `Ctrl+Shift+B` (**Add Stack**) to apply a template.
+2. When prompted, optionally attach soundtrack audio and choose its start time.
+3. Import media from the Media Browser (`Ctrl+I` to focus it).
+4. Move to Timeline with `Ctrl+1`.
+5. Use `Up/Down` to choose track and `Left/Right` to choose clip.
+6. Use `Page Up/Page Down` to jump 5 clips at a time.
+7. Use `Ctrl+Page Up/Ctrl+Page Down` to jump between non-empty tracks.
 
 ### 3) Place and Refine Edits
 
