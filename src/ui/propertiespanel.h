@@ -45,6 +45,7 @@ public:
 
     /// Clear the panel.
     void clear();
+    void focusFirstControl();
 
 signals:
     /// Emitted when an in/out point change requires a tractor rebuild.

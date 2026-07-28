@@ -125,7 +125,10 @@ void TransportBar::onRewind()
 void TransportBar::updateTimecodeDisplay()
 {
     const TimeCode &pos = m_timeline->playheadPosition();
-    m_timecodeLabel->setText(pos.toString());
+    const QString value = pos.toString();
+    m_timecodeLabel->setText(value);
+    m_timecodeLabel->setAccessibleName(
+        tr("Current timecode: %1").arg(value));
 }
 
 void TransportBar::setTimeline(Timeline *timeline)
@@ -138,6 +141,12 @@ void TransportBar::setTimeline(Timeline *timeline)
     connect(m_timeline, &Timeline::playheadChanged,
             this, [this](const TimeCode &) { updateTimecodeDisplay(); });
     updateTimecodeDisplay();
+}
+
+void TransportBar::focusFirstControl()
+{
+    if (m_btnPlayPause)
+        m_btnPlayPause->setFocus(Qt::ShortcutFocusReason);
 }
 
 // ── helpers ─────────────────────────────────────────────────────────

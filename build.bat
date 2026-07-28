@@ -7,6 +7,7 @@ REM  Usage:
 REM      build              Configure (if needed) and build
 REM      build test         Build then run tests
 REM      build run          Build then launch the app
+REM      build release      Test and create a portable release ZIP
 REM      build clean        Delete the build directory
 REM      build setup        Install all dependencies from scratch
 REM      build reconfigure  Force a fresh CMake configure
@@ -26,6 +27,12 @@ set "SCRIPT_DIR=%~dp0"
 set "BUILD_DIR=%SCRIPT_DIR%build"
 set "DEPS=C:\dev\thrive-deps"
 set "ACTION=%~1"
+set "PRESET=default"
+
+if /i "%ACTION%"=="release" (
+    set "BUILD_DIR=%SCRIPT_DIR%build-release"
+    set "PRESET=release"
+)
 
 if /i "%ACTION%"=="help"   goto :help
 if /i "%ACTION%"=="-h"     goto :help
@@ -257,18 +264,40 @@ echo             },
 echo             "environment": {
 echo                 "PATH": "%MLT_FWD%/bin;%QT_FWD%/bin;$penv{PATH}"
 echo             }
+echo         },
+echo         {
+echo             "name": "release",
+echo             "inherits": "release-base",
+echo             "cacheVariables": {
+echo                 "CMAKE_PREFIX_PATH": "%QT_FWD%;%VCPKG_INST_FWD%;%MLT_FWD%",
+echo                 "CMAKE_TOOLCHAIN_FILE": "%VCPKG_FWD%/scripts/buildsystems/vcpkg.cmake",
+echo                 "VCPKG_TARGET_TRIPLET": "x64-windows",
+echo                 "MLT_ROOT": "%MLT_FWD%"
+echo             },
+echo             "environment": {
+echo                 "PATH": "%MLT_FWD%/bin;%QT_FWD%/bin;$penv{PATH}"
+echo             }
 echo         }
 echo     ],
 echo     "buildPresets": [
 echo         {
 echo             "name": "default",
 echo             "configurePreset": "default"
+echo         },
+echo         {
+echo             "name": "release",
+echo             "configurePreset": "release"
 echo         }
 echo     ],
 echo     "testPresets": [
 echo         {
 echo             "name": "default",
 echo             "configurePreset": "default",
+echo             "output": { "outputOnFailure": true }
+echo         },
+echo         {
+echo             "name": "release",
+echo             "configurePreset": "release",
 echo             "output": { "outputOnFailure": true }
 echo         }
 echo     ]
@@ -284,10 +313,11 @@ if /i "%ACTION%"=="reconfigure" (
     )
 )
 if not exist "%BUILD_DIR%\CMakeCache.txt" set "NEED_CONFIGURE=1"
+if not exist "%BUILD_DIR%\build.ninja" set "NEED_CONFIGURE=1"
 
 if "%NEED_CONFIGURE%"=="1" (
-    echo       Running cmake --preset default ...
-    cmake --preset default
+    echo       Running cmake --preset %PRESET% ...
+    cmake --preset %PRESET%
     if !ERRORLEVEL! neq 0 (
         echo.
         echo *** CMake configure failed ***
@@ -436,12 +466,64 @@ if exist "%BUILD_DIR%\thrive-video-suite.exe" (
         echo   The application may crash or fail to play media.
         echo   Fix: delete C:\dev\thrive-deps\mlt and re-run "build"
         echo.
+        if /i "%ACTION%"=="release" exit /b 1
     )
 )
 
 REM ====================================================================
 REM  Post-build actions (test / run)
 REM ====================================================================
+if /i "%ACTION%"=="release" (
+    echo.
+    echo Running release tests...
+    echo.
+    ctest --preset release
+    if !ERRORLEVEL! neq 0 (
+        echo.
+        echo *** Release tests failed; no package was created ***
+        exit /b 1
+    )
+
+    set "APP_VERSION="
+    for /f "tokens=2" %%V in ('findstr /r /c:"^[ ]*VERSION [0-9]" "%SCRIPT_DIR%CMakeLists.txt"') do set "APP_VERSION=%%V"
+    if not defined APP_VERSION set "APP_VERSION=unknown"
+
+    set "DIST_DIR=%SCRIPT_DIR%dist"
+    set "PACKAGE_NAME=ThriveVideoSuite-!APP_VERSION!-windows-x64"
+    set "PACKAGE_ROOT=!DIST_DIR!\!PACKAGE_NAME!"
+    set "PACKAGE_ZIP=!DIST_DIR!\!PACKAGE_NAME!.zip"
+
+    if not exist "!DIST_DIR!" mkdir "!DIST_DIR!"
+    if exist "!PACKAGE_ROOT!" rd /s /q "!PACKAGE_ROOT!"
+    if exist "!PACKAGE_ZIP!" del /q "!PACKAGE_ZIP!"
+    mkdir "!PACKAGE_ROOT!"
+
+    copy /y "%BUILD_DIR%\thrive-video-suite.exe" "!PACKAGE_ROOT!\" >nul
+    if exist "%BUILD_DIR%\vc_redist.x64.exe" (
+        copy /y "%BUILD_DIR%\vc_redist.x64.exe" "!PACKAGE_ROOT!\" >nul
+    )
+    for %%F in ("%BUILD_DIR%\*.dll") do copy /y "%%F" "!PACKAGE_ROOT!\" >nul
+    for %%D in (generic iconengines imageformats multimedia networkinformation platforms styles tls lib share) do (
+        if exist "%BUILD_DIR%\%%D" xcopy /E /I /Y "%BUILD_DIR%\%%D" "!PACKAGE_ROOT!\%%D" >nul
+    )
+    copy /y "%SCRIPT_DIR%README.md" "!PACKAGE_ROOT!\" >nul
+    copy /y "%SCRIPT_DIR%ARCHITECTURE.md" "!PACKAGE_ROOT!\" >nul
+
+    powershell -NoProfile -Command "Compress-Archive -LiteralPath '!PACKAGE_ROOT!' -DestinationPath '!PACKAGE_ZIP!' -CompressionLevel Optimal -Force"
+    if !ERRORLEVEL! neq 0 (
+        echo.
+        echo *** Could not create release ZIP ***
+        exit /b 1
+    )
+
+    echo.
+    echo ============================================================
+    echo   Release package created:
+    echo   !PACKAGE_ZIP!
+    echo ============================================================
+    goto :eof
+)
+
 if /i "%ACTION%"=="test" (
     echo.
     echo Running tests...
@@ -470,6 +552,7 @@ echo.
 echo   Next steps:
 echo     build run     Launch the application
 echo     build test    Run all unit tests
+echo     build release Create a tested portable release ZIP
 echo.
 goto :eof
 
@@ -486,6 +569,7 @@ echo  Commands:
 echo    ^(none^)       Configure ^(if needed^) and build
 echo    test         Build, then run all unit tests
 echo    run          Build, then launch the application
+echo    release      Build Release, run tests, create portable ZIP
 echo    clean        Delete the build directory
 echo    setup        Install dependencies only ^(skip build^)
 echo    reconfigure  Force a fresh CMake configure, then build

@@ -32,6 +32,7 @@
 #include <QFileInfo>
 #include <QDir>
 #include <QDateTime>
+#include <QStandardPaths>
 #include <QTextStream>
 #include <QThread>
 
@@ -41,6 +42,14 @@
 #  endif
 #  include <windows.h>
 #endif
+
+static QString diagnosticsDirectory()
+{
+    const QString path = QStandardPaths::writableLocation(
+        QStandardPaths::AppLocalDataLocation) + QStringLiteral("/logs");
+    QDir().mkpath(path);
+    return path;
+}
 
 // ── Global crash handler ────────────────────────────────────────────
 // Catches unhandled exceptions on ANY thread and writes crash info
@@ -98,6 +107,10 @@ static LONG WINAPI globalCrashHandler(EXCEPTION_POINTERS *info)
 static int renderMain(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
+    app.setApplicationName(QLatin1String(Thrive::kAppName));
+    app.setOrganizationName(QLatin1String(Thrive::kOrgName));
+    app.setOrganizationDomain(QLatin1String(Thrive::kOrgDomain));
+    app.setApplicationVersion(QLatin1String(Thrive::kAppVersion));
 
     const QStringList args = app.arguments();
 
@@ -117,9 +130,9 @@ static int renderMain(int argc, char *argv[])
     const int vb           = argValue(QStringLiteral("--vb")).toInt();
     const int ab           = argValue(QStringLiteral("--ab")).toInt();
 
-    // Open a render log next to the executable
     const QDir appDir(app.applicationDirPath());
-    const QString logPath = appDir.filePath(QStringLiteral("render_log.txt"));
+    const QString logPath = QDir(diagnosticsDirectory())
+                                .filePath(QStringLiteral("render_log.txt"));
     QFile logFile(logPath);
     (void)logFile.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text);
     QTextStream log(&logFile);
@@ -368,39 +381,40 @@ int main(int argc, char *argv[])
     }
 
     // ── Normal GUI mode ──────────────────────────────────────────────
-    // Install log file handler before anything else.
-    // QCoreApplication::applicationDirPath() is empty before QApplication
-    // construction, so derive the exe directory from argv[0].
-    const QFileInfo exeInfo(QString::fromLocal8Bit(argv[0]));
-    const QString exeDir = exeInfo.absolutePath();
-
 #ifdef Q_OS_WIN
     // Set up crash log path and install the global exception handler
     // BEFORE anything else — this catches crashes on ANY thread.
     {
-        const QString crashPath = exeDir + QStringLiteral("/crash_log.txt");
+        const QString crashPath = QDir(QDir::tempPath())
+                                      .filePath(QStringLiteral("ThriveVideoSuite-crash.log"));
         const QByteArray pathUtf8 = crashPath.toLocal8Bit();
         strncpy_s(g_crashLogPath, pathUtf8.constData(), _TRUNCATE);
         SetUnhandledExceptionFilter(globalCrashHandler);
     }
 #endif
 
-    const QString logPath = exeDir + QStringLiteral("/thrive_debug.log");
-    QFile logFile(logPath);
-    if (!logFile.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-        // Fallback: try a hardcoded path
-        logFile.setFileName(QStringLiteral("C:/Users/alex/thrive_debug.log"));
-        (void)logFile.open(QIODevice::WriteOnly | QIODevice::Truncate);
-    }
-    g_logFile = &logFile;
-    qInstallMessageHandler(logMessageHandler);
-    qDebug() << "Thrive Video Suite starting, log at:" << logFile.fileName();
-
     QApplication app(argc, argv);
     app.setApplicationName(QLatin1String(Thrive::kAppName));
     app.setOrganizationName(QLatin1String(Thrive::kOrgName));
     app.setOrganizationDomain(QLatin1String(Thrive::kOrgDomain));
     app.setApplicationVersion(QLatin1String(Thrive::kAppVersion));
+
+    const QString logDir = diagnosticsDirectory();
+
+#ifdef Q_OS_WIN
+    {
+        const QString crashPath = QDir(logDir).filePath(
+            QStringLiteral("crash_log.txt"));
+        const QByteArray pathUtf8 = crashPath.toLocal8Bit();
+        strncpy_s(g_crashLogPath, pathUtf8.constData(), _TRUNCATE);
+    }
+#endif
+
+    QFile logFile(QDir(logDir).filePath(QStringLiteral("thrive.log")));
+    (void)logFile.open(QIODevice::WriteOnly | QIODevice::Truncate);
+    g_logFile = &logFile;
+    qInstallMessageHandler(logMessageHandler);
+    qDebug() << "Thrive Video Suite starting, log at:" << logFile.fileName();
 
     // ── Translations ────────────────────────────────────────────────
     QTranslator translator;

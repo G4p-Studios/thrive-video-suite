@@ -11,8 +11,6 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 #include <QAccessible>
-#include <QCoreApplication>
-#include <QDir>
 
 namespace Thrive {
 
@@ -90,8 +88,7 @@ void ExportProgressDialog::onFinished(bool success)
     } else {
         // Render was cancelled or failed
         if (isVisible()) {
-            const QString logPath = QDir(QCoreApplication::applicationDirPath())
-                                        .filePath(QStringLiteral("render_log.txt"));
+            const QString logPath = m_render->renderLogPath();
             m_announcer->announce(
                 tr("Export failed. Render log saved to: %1").arg(logPath),
                 Announcer::Priority::High);

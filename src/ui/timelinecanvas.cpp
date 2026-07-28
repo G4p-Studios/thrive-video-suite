@@ -113,8 +113,9 @@ void TimelineCanvas::paintEvent(QPaintEvent *event)
 
     const QRect clip = event->rect();
 
-    // Background
-    p.fillRect(rect(), QColor(30, 30, 30));
+    // Use the application palette so Windows High Contrast and user themes
+    // carry through to the primary editing surface.
+    p.fillRect(rect(), palette().color(QPalette::Window));
 
     drawRuler(p, clip);
     drawTracks(p, clip);
@@ -126,9 +127,9 @@ void TimelineCanvas::paintEvent(QPaintEvent *event)
 void TimelineCanvas::drawRuler(QPainter &p, const QRect & /*clip*/)
 {
     const QRect rulerRect(0, 0, width(), RulerHeight);
-    p.fillRect(rulerRect, QColor(45, 45, 45));
+    p.fillRect(rulerRect, palette().color(QPalette::AlternateBase));
 
-    p.setPen(QColor(180, 180, 180));
+    p.setPen(palette().color(QPalette::Text));
     QFont f = font();
     f.setPointSize(8);
     p.setFont(f);
@@ -176,7 +177,7 @@ void TimelineCanvas::drawRuler(QPainter &p, const QRect & /*clip*/)
     }
 
     // Divider line
-    p.setPen(QColor(60, 60, 60));
+    p.setPen(palette().color(QPalette::Mid));
     p.drawLine(0, RulerHeight - 1, width(), RulerHeight - 1);
 }
 
@@ -197,14 +198,14 @@ void TimelineCanvas::drawTracks(QPainter &p, const QRect & /*clip*/)
         const int trackY = RulerHeight + TrackGap + t * (TrackHeight + TrackGap);
 
         // Track background
-        QColor bgColor = (track->type() == Track::Type::Video)
-                             ? QColor(40, 45, 55) : QColor(40, 55, 45);
+        QColor bgColor = palette().color(
+            t % 2 == 0 ? QPalette::Base : QPalette::AlternateBase);
         p.fillRect(0, trackY, width(), TrackHeight, bgColor);
 
         // Track header
         QRect headerRect(0, trackY, HeaderWidth, TrackHeight);
-        p.fillRect(headerRect, QColor(50, 50, 55));
-        p.setPen(QColor(200, 200, 200));
+        p.fillRect(headerRect, palette().color(QPalette::Button));
+        p.setPen(palette().color(QPalette::ButtonText));
         QFont hf = font();
         hf.setPointSize(9);
         hf.setBold(t == currentTrack);
@@ -216,7 +217,7 @@ void TimelineCanvas::drawTracks(QPainter &p, const QRect & /*clip*/)
         QFont sf = font();
         sf.setPointSize(7);
         p.setFont(sf);
-        p.setPen(QColor(120, 120, 130));
+        p.setPen(palette().color(QPalette::PlaceholderText));
         p.drawText(headerRect.adjusted(4, 0, -2, -4), Qt::AlignBottom,
                    track->typeString());
 
@@ -241,12 +242,12 @@ void TimelineCanvas::drawTracks(QPainter &p, const QRect & /*clip*/)
             QRect clipRect(clipX, trackY + 1, clipW, TrackHeight - 2);
 
             // Clip body
-            bool isFocused = (t == currentTrack && c == currentClip);
-            QColor clipColor = (track->type() == Track::Type::Video)
-                                   ? QColor(58, 95, 148)
-                                   : QColor(58, 130, 80);
-            if (isFocused)
-                clipColor = clipColor.lighter(140);
+            const bool isSelected = (t == currentTrack && c == currentClip);
+            const bool hasKeyboardFocus =
+                parentWidget() && parentWidget()->hasFocus();
+            QColor clipColor = isSelected
+                ? palette().color(QPalette::Highlight)
+                : palette().color(QPalette::Button);
 
             p.setPen(Qt::NoPen);
             p.setBrush(clipColor);
@@ -318,10 +319,12 @@ void TimelineCanvas::drawTracks(QPainter &p, const QRect & /*clip*/)
 
             // ── Clip name ───────────────────────────────────────
             {
-                p.setPen(Qt::white);
+                p.setPen(isSelected
+                    ? palette().color(QPalette::HighlightedText)
+                    : palette().color(QPalette::ButtonText));
                 QFont nf = font();
                 nf.setPointSize(8);
-                nf.setBold(isFocused);
+                nf.setBold(isSelected);
                 p.setFont(nf);
 
                 QRect nameRect(clipX + 4, trackY + 2,
@@ -334,15 +337,15 @@ void TimelineCanvas::drawTracks(QPainter &p, const QRect & /*clip*/)
             }
 
             // ── Focus border ────────────────────────────────────
-            if (isFocused) {
-                p.setPen(QPen(QColor(255, 200, 60), 2));
+            if (isSelected && hasKeyboardFocus) {
+                p.setPen(QPen(palette().color(QPalette::Text), 3));
                 p.setBrush(Qt::NoBrush);
                 p.drawRoundedRect(clipRect.adjusted(1, 1, -1, -1), 3, 3);
             }
         }
 
         // Divider line below track
-        p.setPen(QColor(55, 55, 55));
+        p.setPen(palette().color(QPalette::Mid));
         p.drawLine(0, trackY + TrackHeight,
                    width(), trackY + TrackHeight);
     }
@@ -361,7 +364,8 @@ void TimelineCanvas::drawPlayhead(QPainter &p, const QRect & /*clip*/)
         return;
 
     // Playhead line
-    p.setPen(QPen(QColor(255, 60, 60), 2));
+    const QColor playheadColor = palette().color(QPalette::Link);
+    p.setPen(QPen(playheadColor, 2));
     p.drawLine(x, 0, x, height());
 
     // Playhead triangle at the top
@@ -371,7 +375,7 @@ void TimelineCanvas::drawPlayhead(QPainter &p, const QRect & /*clip*/)
     tri.lineTo(x, 8);
     tri.closeSubpath();
     p.setPen(Qt::NoPen);
-    p.setBrush(QColor(255, 60, 60));
+    p.setBrush(playheadColor);
     p.drawPath(tri);
 }
 

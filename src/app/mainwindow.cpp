@@ -1834,7 +1834,7 @@ void MainWindow::createActions()
             if (auto *dock = qobject_cast<QDockWidget *>(m_properties->parentWidget()))
                 dock->raise();
         }
-        m_properties->setFocus();
+        m_properties->focusFirstControl();
         m_announcer->announce(tr("Properties panel"),
                               Announcer::Priority::Normal);
     });
@@ -1848,7 +1848,7 @@ void MainWindow::createActions()
 
     m_actFocusTransport = new QAction(tr("Focus T&ransport"), this);
     connect(m_actFocusTransport, &QAction::triggered, this, [this]() {
-        m_transport->setFocus();
+        m_transport->focusFirstControl();
         m_announcer->announce(tr("Transport"),
                               Announcer::Priority::Normal);
     });
@@ -2347,7 +2347,7 @@ void MainWindow::createDockWidgets()
         }
 
         if (!effectsVisible && m_effects->isAncestorOf(fw) && propVisible) {
-            m_properties->setFocus();
+            m_properties->focusFirstControl();
         }
     };
 

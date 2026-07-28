@@ -22,6 +22,8 @@ public:
 
     static TimeCode fromSeconds(double seconds, double fps = 25.0);
     static TimeCode fromString(const QString &text, double fps = 25.0);
+    static bool tryParse(const QString &text, TimeCode *result,
+                         double fps = 25.0);
 
     [[nodiscard]] int64_t  frame()   const { return m_frame; }
     [[nodiscard]] double   seconds() const;

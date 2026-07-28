@@ -61,6 +61,10 @@ FetchContent_MakeAvailable(prism)
 # ---------------------------------------------------------------------------
 set(QUAZIP_QT_MAJOR_VERSION 6 CACHE STRING "" FORCE)
 set(QUAZIP_INSTALL OFF CACHE BOOL "" FORCE)
+# .tvs projects use ordinary ZIP/deflate. Disable QuaZip's optional bzip2
+# backend so clean builds do not fetch an unpinned third-party repository.
+set(QUAZIP_BZIP2 OFF CACHE BOOL "" FORCE)
+set(QUAZIP_FETCH_LIBS OFF CACHE BOOL "" FORCE)
 
 # Build QuaZip as a STATIC library.  This avoids deploying a separate
 # quazip1-qt6.dll and — critically — makes its Qt6::Core5Compat

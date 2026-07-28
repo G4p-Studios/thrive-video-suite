@@ -63,12 +63,28 @@ Everything else (CMake, vcpkg, MLT Framework, pkg-config) is installed automatic
 build              # configure + build (installs deps on first run)
 build test         # build + run all unit tests
 build run          # build + launch the app
+build release      # test + create a portable Release ZIP in dist/
 build clean        # delete the build directory
 build reconfigure  # force a fresh cmake configure
 build setup        # install dependencies only
 ```
 
 That's it — one command. On a fresh clone the first `build` takes 10–20 minutes while vcpkg compiles packages and MLT is downloaded; subsequent builds are incremental and fast.
+
+### Creating a pre-release package
+
+Run:
+
+```bat
+build release
+```
+
+This creates an optimized `Release` build in `build-release/`, runs the
+complete unit-test suite, deploys the required Qt, MLT, and codec runtime
+files, and writes a clean portable ZIP to `dist/`. The package excludes test
+executables, compiler metadata, and debug symbols. It also includes Microsoft's
+x64 Visual C++ Redistributable installer for testers who do not already have
+the required runtime.
 
 ### First-time setup (step by step)
 

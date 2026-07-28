@@ -18,8 +18,17 @@
 #include <QDebug>
 #include <QCoreApplication>
 #include <QDir>
+#include <QStandardPaths>
 
 namespace Thrive {
+
+static QString diagnosticsDirectory()
+{
+    const QString path = QStandardPaths::writableLocation(
+        QStandardPaths::AppLocalDataLocation) + QStringLiteral("/logs");
+    QDir().mkpath(path);
+    return path;
+}
 
 // ─── RenderEngine ────────────────────────────────────────────────
 
@@ -75,7 +84,7 @@ bool RenderEngine::startRender(Mlt::Producer *producer,
 
     // ── 2. Save a debug copy that survives crashes ──────────────────
     {
-        const QString debugXml = QDir(QCoreApplication::applicationDirPath())
+        const QString debugXml = QDir(diagnosticsDirectory())
                                      .filePath(QStringLiteral("render_debug.mlt"));
         QFile::remove(debugXml);
         QFile::copy(m_xmlTempPath, debugXml);
@@ -116,7 +125,7 @@ bool RenderEngine::startRender(Mlt::Producer *producer,
     m_lastPercent = 0;
     m_gotSuccess  = false;
 
-    m_renderLogPath = QDir(QCoreApplication::applicationDirPath())
+    m_renderLogPath = QDir(diagnosticsDirectory())
                           .filePath(QStringLiteral("render_log.txt"));
 
     m_process = new QProcess(this);

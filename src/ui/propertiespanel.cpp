@@ -74,6 +74,16 @@ PropertiesPanel::PropertiesPanel(Announcer *announcer,
     clear();
 }
 
+void PropertiesPanel::focusFirstControl()
+{
+    if (m_clipName && m_clipName->isVisible() && m_clipName->isEnabled()) {
+        m_clipName->setFocus(Qt::ShortcutFocusReason);
+        return;
+    }
+    if (m_scrollArea)
+        m_scrollArea->setFocus(Qt::ShortcutFocusReason);
+}
+
 // ── form construction ────────────────────────────────────────────────
 
 void PropertiesPanel::buildClipForm()
@@ -94,11 +104,15 @@ void PropertiesPanel::buildClipForm()
     m_clipInPoint = new QLineEdit(m_formWidget);
     m_clipInPoint->setAccessibleName(tr("In point timecode"));
     m_clipInPoint->setPlaceholderText(QStringLiteral("00:00:00:00"));
+    m_clipInPoint->setAccessibleDescription(
+        tr("Enter timecode in hours, minutes, seconds, frames format."));
     m_formLayout->addRow(tr("&In:"), m_clipInPoint);
 
     m_clipOutPoint = new QLineEdit(m_formWidget);
     m_clipOutPoint->setAccessibleName(tr("Out point timecode"));
     m_clipOutPoint->setPlaceholderText(QStringLiteral("00:00:00:00"));
+    m_clipOutPoint->setAccessibleDescription(
+        tr("Enter timecode in hours, minutes, seconds, frames format."));
     m_formLayout->addRow(tr("&Out:"), m_clipOutPoint);
 
     m_clipDuration = new QLabel(m_formWidget);
@@ -148,6 +162,8 @@ void PropertiesPanel::inspectClip(Clip *clip)
     m_clipName->setText(clip->name());
     m_clipDescription->setPlainText(clip->description());
     m_clipSource->setText(clip->sourcePath());
+    m_clipSource->setAccessibleName(
+        tr("Source file: %1").arg(clip->sourcePath()));
     m_clipSource->setVisible(true);
 
     m_clipInPoint->setText(clip->inPoint().toString());
@@ -162,6 +178,8 @@ void PropertiesPanel::inspectClip(Clip *clip)
                             + QStringLiteral(" (")
                             + dur.toSpokenString()
                             + QStringLiteral(")"));
+    m_clipDuration->setAccessibleName(
+        tr("Duration: %1").arg(m_clipDuration->text()));
 
     // Populate effects
     populateEffects(clip->effects());
@@ -189,6 +207,8 @@ void PropertiesPanel::inspectTrack(Track *track)
     m_clipDescription->clear();
     m_clipSource->setText(track->type() == Track::Type::Video
                               ? tr("Video track") : tr("Audio track"));
+    m_clipSource->setAccessibleName(
+        tr("Track type: %1").arg(m_clipSource->text()));
     m_clipSource->setVisible(true);
 
     m_clipInPoint->clear();
@@ -196,6 +216,8 @@ void PropertiesPanel::inspectTrack(Track *track)
     m_clipOutPoint->clear();
     m_clipOutPoint->setEnabled(false);
     m_clipDuration->setText(tr("%n clip(s)", nullptr, track->clips().size()));
+    m_clipDuration->setAccessibleName(
+        tr("Track duration: %1").arg(m_clipDuration->text()));
 
     // Show track-level effects (read-only – no reordering/removal)
     populateEffects(track->trackEffects(), /*readOnly=*/true);
@@ -262,7 +284,14 @@ void PropertiesPanel::onInPointEdited()
         return;
 
     const double fps = m_currentClip->inPoint().fps();
-    const TimeCode newIn = TimeCode::fromString(m_clipInPoint->text(), fps);
+    TimeCode newIn;
+    if (!TimeCode::tryParse(m_clipInPoint->text(), &newIn, fps)) {
+        m_announcer->announce(
+            tr("Invalid in point. Enter four numeric fields in hours, minutes, seconds, frames format."),
+            Announcer::Priority::High);
+        m_clipInPoint->setFocus(Qt::OtherFocusReason);
+        return;
+    }
 
     if (newIn == m_currentClip->inPoint())
         return; // unchanged
@@ -287,6 +316,8 @@ void PropertiesPanel::onInPointEdited()
                             + QStringLiteral(" (")
                             + durTc.toSpokenString()
                             + QStringLiteral(")"));
+    m_clipDuration->setAccessibleName(
+        tr("Duration: %1").arg(m_clipDuration->text()));
 
     m_announcer->announce(
         tr("In point set to %1").arg(newIn.toString()),
@@ -299,7 +330,14 @@ void PropertiesPanel::onOutPointEdited()
         return;
 
     const double fps = m_currentClip->outPoint().fps();
-    const TimeCode newOut = TimeCode::fromString(m_clipOutPoint->text(), fps);
+    TimeCode newOut;
+    if (!TimeCode::tryParse(m_clipOutPoint->text(), &newOut, fps)) {
+        m_announcer->announce(
+            tr("Invalid out point. Enter four numeric fields in hours, minutes, seconds, frames format."),
+            Announcer::Priority::High);
+        m_clipOutPoint->setFocus(Qt::OtherFocusReason);
+        return;
+    }
 
     if (newOut == m_currentClip->outPoint())
         return; // unchanged
@@ -324,6 +362,8 @@ void PropertiesPanel::onOutPointEdited()
                             + QStringLiteral(" (")
                             + durTc.toSpokenString()
                             + QStringLiteral(")"));
+    m_clipDuration->setAccessibleName(
+        tr("Duration: %1").arg(m_clipDuration->text()));
 
     m_announcer->announce(
         tr("Out point set to %1").arg(newOut.toString()),

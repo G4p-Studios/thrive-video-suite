@@ -26,6 +26,7 @@ public:
                           Timeline *timeline,
                           Announcer *announcer,
                           QWidget *parent = nullptr);
+    void focusFirstControl();
 
 public slots:
     void updateTimecodeDisplay();

@@ -83,9 +83,14 @@ QAccessibleInterface *AccessibleTimelineView::focusChild() const
 {
     auto *tl = timeline();
     auto *w  = qobject_cast<TimelineWidget *>(object());
-    if (!tl || !w) return nullptr;
-    return new AccessibleTimelineCell(w, tl->currentTrackIndex(),
-                                      tl->currentClipIndex());
+    if (!tl || !w || !w->hasFocus()) return nullptr;
+    auto *cell = new AccessibleTimelineCell(w, tl->currentTrackIndex(),
+                                             tl->currentClipIndex());
+    if (!cell->isValid()) {
+        delete cell;
+        return nullptr;
+    }
+    return cell;
 }
 
 int AccessibleTimelineView::indexOfChild(const QAccessibleInterface *iface) const
@@ -125,13 +130,15 @@ int AccessibleTimelineView::columnCount() const
     int maxClips = 0;
     for (const auto *trk : tl->tracks())
         maxClips = qMax(maxClips, static_cast<int>(trk->clips().size()));
-    return qMax(maxClips, 1);
+    return maxClips;
 }
 
 QAccessibleInterface *AccessibleTimelineView::cellAt(int row, int column) const
 {
     auto *w = qobject_cast<TimelineWidget *>(object());
-    if (!w) return nullptr;
+    if (!w || row < 0 || row >= rowCount()
+        || column < 0 || column >= columnCount())
+        return nullptr;
     return new AccessibleTimelineCell(w, row, column);
 }
 
@@ -151,7 +158,18 @@ QString AccessibleTimelineView::columnDescription(int column) const
 }
 
 // Selection helpers – single-cell selection model
-int  AccessibleTimelineView::selectedCellCount()   const { return 1; }
+int AccessibleTimelineView::selectedCellCount() const
+{
+    auto *tl = timeline();
+    if (!tl)
+        return 0;
+    const int row = tl->currentTrackIndex();
+    if (row < 0 || row >= tl->tracks().size())
+        return 0;
+    const int column = tl->currentClipIndex();
+    return column >= 0 && column < tl->tracks().at(row)->clips().size()
+        ? 1 : 0;
+}
 int  AccessibleTimelineView::selectedColumnCount() const { return 0; }
 int  AccessibleTimelineView::selectedRowCount()    const { return 0; }
 
@@ -160,8 +178,13 @@ QList<QAccessibleInterface *> AccessibleTimelineView::selectedCells() const
     auto *tl = timeline();
     auto *w  = qobject_cast<TimelineWidget *>(object());
     if (!tl || !w) return {};
-    return { new AccessibleTimelineCell(w, tl->currentTrackIndex(),
-                                        tl->currentClipIndex()) };
+    auto *cell = new AccessibleTimelineCell(w, tl->currentTrackIndex(),
+                                             tl->currentClipIndex());
+    if (!cell->isValid()) {
+        delete cell;
+        return {};
+    }
+    return { cell };
 }
 
 QList<int> AccessibleTimelineView::selectedColumns()  const { return {}; }
@@ -192,7 +215,11 @@ AccessibleTimelineCell::AccessibleTimelineCell(TimelineWidget *widget,
 
 bool AccessibleTimelineCell::isValid() const
 {
-    return m_widget != nullptr;
+    auto *tl = m_widget ? m_widget->timeline() : nullptr;
+    if (!tl || m_row < 0 || m_row >= tl->tracks().size())
+        return false;
+    const auto &clips = tl->tracks().at(m_row)->clips();
+    return m_col >= 0 && m_col < clips.size();
 }
 
 QObject *AccessibleTimelineCell::object() const
@@ -213,17 +240,23 @@ QAccessible::Role AccessibleTimelineCell::role() const
 QAccessible::State AccessibleTimelineCell::state() const
 {
     QAccessible::State s;
+    if (!isValid()) {
+        s.invisible = true;
+        s.disabled = true;
+        return s;
+    }
     s.selectable = true;
     s.focusable  = true;
     s.selected   = isSelected();
-    s.focused    = isSelected();
+    s.focused    = s.selected && m_widget->hasFocus();
     return s;
 }
 
 QRect AccessibleTimelineCell::rect() const
 {
-    // No meaningful visual rect – the widget is a flat label.
-    return m_widget ? m_widget->geometry() : QRect();
+    // Do not expose the whole timeline as every cell's bounds. Until the
+    // canvas provides clip geometry, an empty rect is safer for AT hit tests.
+    return {};
 }
 
 QString AccessibleTimelineCell::text(QAccessible::Text t) const

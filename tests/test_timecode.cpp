@@ -76,6 +76,25 @@ private slots:
         QVERIFY(a == TimeCode(10, 30.0));
         QVERIFY(a != b);
     }
+
+    void parseValidTimecode()
+    {
+        TimeCode parsed;
+        QVERIFY(TimeCode::tryParse(QStringLiteral("01:02:03:04"),
+                                   &parsed, 25.0));
+        QCOMPARE(parsed.toString(), QStringLiteral("01:02:03:04"));
+    }
+
+    void rejectMalformedTimecode()
+    {
+        TimeCode parsed;
+        QVERIFY(!TimeCode::tryParse(QStringLiteral("not a timecode"),
+                                    &parsed, 25.0));
+        QVERIFY(!TimeCode::tryParse(QStringLiteral("00:60:00:00"),
+                                    &parsed, 25.0));
+        QVERIFY(!TimeCode::tryParse(QStringLiteral("00:00:00:25"),
+                                    &parsed, 25.0));
+    }
 };
 
 QTEST_MAIN(TestTimeCode)

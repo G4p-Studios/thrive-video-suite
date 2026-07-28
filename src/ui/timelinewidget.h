@@ -63,6 +63,7 @@ protected:
     void resizeEvent(QResizeEvent *event) override;
 
 private:
+    void refreshVisuals();
     void updateStatusLabel();
     void connectTrackSignals();
     void notifyCellFocus();

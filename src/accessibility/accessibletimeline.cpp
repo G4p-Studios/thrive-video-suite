@@ -72,16 +72,8 @@ void AccessibleTimeline::onCurrentTrackChanged(int index)
         return;
     }
 
-    const Track *trk = tracks.at(index);
-    const QString typeStr = (trk->type() == Track::Type::Video)
-                                ? tr("Video") : tr("Audio");
-
-    //: e.g. "Track 1, Video, 3 clips"
-    const QString msg = tr("Track %1, %2, %n clip(s).", nullptr, trk->clips().size())
-                            .arg(index + 1)
-                            .arg(typeStr);
-
-    m_announcer->announce(msg, Announcer::Priority::Normal);
+    // Valid navigation is exposed by TimelineWidget's virtual-cell focus
+    // event. Announcing it again through Prism produces duplicate speech.
 }
 
 // ── slot: clip focus changed ────────────────────────────────────────
@@ -102,7 +94,17 @@ void AccessibleTimeline::onCurrentClipChanged(int index)
         return;
     }
 
-    announceCurrentClip();
+    // Preserve non-speech audio cues, but let the accessible cell focus/name
+    // be the single source of spoken navigation feedback.
+    const Clip *clip = clips.at(index);
+    const TimeCode &playhead = m_timeline->playheadPosition();
+    if (m_cues) {
+        if (playhead == clip->timelinePosition())
+            m_cues->play(AudioCueManager::Cue::ClipStart);
+        else if (playhead == clip->timelinePosition()
+                 + clip->outPoint() - clip->inPoint())
+            m_cues->play(AudioCueManager::Cue::ClipEnd);
+    }
 }
 
 // ── slot: playhead moved (scrub / seek) ─────────────────────────────

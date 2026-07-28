@@ -70,11 +70,11 @@ TimelineWidget::TimelineWidget(Timeline *timeline,
         m_timeline, announcer, cues, this);
 
     connect(m_timeline, &Timeline::currentTrackChanged,
-            this, &TimelineWidget::refresh);
+            this, &TimelineWidget::refreshVisuals);
     connect(m_timeline, &Timeline::currentClipChanged,
-            this, [this](int, int) { refresh(); });
+            this, [this](int, int) { refreshVisuals(); });
     connect(m_timeline, &Timeline::playheadChanged,
-            this, [this](const TimeCode &) { refresh(); });
+            this, [this](const TimeCode &) { refreshVisuals(); });
     connect(m_timeline, &Timeline::tracksChanged,
             this, [this]() {
                 connectTrackSignals();
@@ -88,19 +88,22 @@ TimelineWidget::TimelineWidget(Timeline *timeline,
 
 void TimelineWidget::refresh()
 {
+    refreshVisuals();
+
+    // Structural changes only. Selection and playhead movement must not
+    // reset the entire accessibility table during navigation or playback.
+    QAccessibleTableModelChangeEvent ev(this,
+        QAccessibleTableModelChangeEvent::ModelReset);
+    QAccessible::updateAccessibility(&ev);
+}
+
+void TimelineWidget::refreshVisuals()
+{
     updateStatusLabel();
     updateScrollBar();
 
     if (m_canvas)
         m_canvas->refresh();
-
-    // Notify screen readers that the table model changed so NVDA
-    // picks up newly added clips / tracks.
-    if (auto *iface = QAccessible::queryAccessibleInterface(this)) {
-        QAccessibleTableModelChangeEvent ev(this,
-            QAccessibleTableModelChangeEvent::ModelReset);
-        QAccessible::updateAccessibility(&ev);
-    }
 }
 
 void TimelineWidget::notifyCellFocus()
@@ -137,11 +140,11 @@ void TimelineWidget::setTimeline(Timeline *timeline)
     m_timeline = timeline;
 
     connect(m_timeline, &Timeline::currentTrackChanged,
-            this, &TimelineWidget::refresh);
+            this, &TimelineWidget::refreshVisuals);
     connect(m_timeline, &Timeline::currentClipChanged,
-            this, [this](int, int) { refresh(); });
+            this, [this](int, int) { refreshVisuals(); });
     connect(m_timeline, &Timeline::playheadChanged,
-            this, [this](const TimeCode &) { refresh(); });
+            this, [this](const TimeCode &) { refreshVisuals(); });
     connect(m_timeline, &Timeline::tracksChanged,
             this, [this]() {
                 connectTrackSignals();

@@ -135,11 +135,14 @@ void EffectsBrowser::onCurrentChanged(QListWidgetItem *current,
 {
     if (!current) {
         m_description->clear();
+        m_description->setAccessibleName(tr("Effect description"));
         return;
     }
 
     const QString desc = current->data(Qt::UserRole + 1).toString();
     m_description->setText(desc);
+    m_description->setAccessibleName(
+        tr("Effect description: %1").arg(desc));
     m_announcer->announce(
         QStringLiteral("%1. %2").arg(current->text(), desc),
         Announcer::Priority::Low);

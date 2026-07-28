@@ -50,6 +50,7 @@ public:
 
     [[nodiscard]] bool isRendering() const { return m_rendering; }
     [[nodiscard]] int  progressPercent() const { return m_lastPercent; }
+    [[nodiscard]] QString renderLogPath() const { return m_renderLogPath; }
 
 signals:
     void renderStarted();

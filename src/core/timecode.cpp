@@ -18,19 +18,39 @@ TimeCode TimeCode::fromSeconds(double seconds, double fps)
 
 TimeCode TimeCode::fromString(const QString &text, double fps)
 {
-    // Parse "HH:MM:SS:FF"
+    TimeCode result;
+    return tryParse(text, &result, fps) ? result : TimeCode(0, fps);
+}
+
+bool TimeCode::tryParse(const QString &text, TimeCode *result, double fps)
+{
+    if (!result || fps <= 0.0)
+        return false;
+
+    // Parse and validate "HH:MM:SS:FF".
     const auto parts = text.split(u':');
     if (parts.size() != 4)
-        return TimeCode(0, fps);
+        return false;
 
-    const int h = parts[0].toInt();
-    const int m = parts[1].toInt();
-    const int s = parts[2].toInt();
-    const int f = parts[3].toInt();
+    bool hOk = false;
+    bool mOk = false;
+    bool sOk = false;
+    bool fOk = false;
+    const int h = parts[0].toInt(&hOk);
+    const int m = parts[1].toInt(&mOk);
+    const int s = parts[2].toInt(&sOk);
+    const int f = parts[3].toInt(&fOk);
+
+    const int framesPerSecond = static_cast<int>(std::ceil(fps));
+    if (!hOk || !mOk || !sOk || !fOk || h < 0
+        || m < 0 || m > 59 || s < 0 || s > 59
+        || f < 0 || f >= framesPerSecond)
+        return false;
 
     const auto totalFrames = static_cast<int64_t>(
         ((h * 3600) + (m * 60) + s) * fps + f);
-    return TimeCode(totalFrames, fps);
+    *result = TimeCode(totalFrames, fps);
+    return true;
 }
 
 double TimeCode::seconds() const
