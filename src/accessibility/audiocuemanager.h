@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Thrive Video Suite – Audio cue manager (boundary tones, navigation feedback)
 
 #pragma once

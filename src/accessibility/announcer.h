@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Thrive Video Suite – Priority-queued announcement system
 
 #pragma once

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Thrive Video Suite – Visual timeline canvas implementation
 
 #include "timelinecanvas.h"

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Thrive Video Suite – Main window implementation
 
 #include "mainwindow.h"
@@ -528,7 +528,9 @@ void MainWindow::showAbout()
         tr("<h2>Thrive Video Suite %1</h2>"
            "<p>A fully accessible video editor for blind and visually "
            "impaired users.</p>"
-           "<p>Built with Qt, MLT Framework, and Prism.</p>")
+           "<p>Built with Qt, MLT Framework, and Prism.</p>"
+           "<p>Licensed under the GNU General Public License version 3 "
+           "or later. This program comes with no warranty.</p>")
             .arg(QLatin1String(kAppVersion)));
 }
 

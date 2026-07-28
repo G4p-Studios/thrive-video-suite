@@ -123,4 +123,5 @@ We welcome contributors of all backgrounds and experience levels.
 ## License
 
 By contributing, you agree that your contributions will be licensed under
-the MIT License — see [LICENSE](LICENSE) for details.
+the GNU General Public License version 3 or later — see
+[LICENSE](LICENSE) for details.

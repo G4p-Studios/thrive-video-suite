@@ -508,6 +508,31 @@ if /i "%ACTION%"=="release" (
     )
     copy /y "%SCRIPT_DIR%README.md" "!PACKAGE_ROOT!\" >nul
     copy /y "%SCRIPT_DIR%ARCHITECTURE.md" "!PACKAGE_ROOT!\" >nul
+    copy /y "%SCRIPT_DIR%LICENSE" "!PACKAGE_ROOT!\" >nul
+    copy /y "%SCRIPT_DIR%THIRD_PARTY_NOTICES.md" "!PACKAGE_ROOT!\" >nul
+
+    mkdir "!PACKAGE_ROOT!\licenses"
+    if exist "%QT_DIR%\..\..\Licenses\LICENSE" (
+        copy /y "%QT_DIR%\..\..\Licenses\LICENSE" "!PACKAGE_ROOT!\licenses\Qt-LICENSE.txt" >nul
+    )
+    if exist "%DEPS%\mlt-src\COPYING" (
+        copy /y "%DEPS%\mlt-src\COPYING" "!PACKAGE_ROOT!\licenses\MLT-COPYING.txt" >nul
+    )
+    if exist "%DEPS%\ffmpeg-master\ffmpeg-master-latest-win64-lgpl-shared\LICENSE.txt" (
+        copy /y "%DEPS%\ffmpeg-master\ffmpeg-master-latest-win64-lgpl-shared\LICENSE.txt" "!PACKAGE_ROOT!\licenses\FFmpeg-LICENSE.txt" >nul
+    )
+    if exist "%BUILD_DIR%\_deps\prism-src\LICENSE" (
+        copy /y "%BUILD_DIR%\_deps\prism-src\LICENSE" "!PACKAGE_ROOT!\licenses\Prism-LICENSE.txt" >nul
+    )
+    if exist "%BUILD_DIR%\_deps\quazip-src\COPYING" (
+        copy /y "%BUILD_DIR%\_deps\quazip-src\COPYING" "!PACKAGE_ROOT!\licenses\QuaZip-COPYING.txt" >nul
+    )
+    if exist "%DEPS%\shotcut-extracted\Shotcut\COPYING.txt" (
+        copy /y "%DEPS%\shotcut-extracted\Shotcut\COPYING.txt" "!PACKAGE_ROOT!\licenses\Shotcut-COPYING.txt" >nul
+    )
+    if exist "%DEPS%\shotcut-extracted\Shotcut\LICENSE" (
+        copy /y "%DEPS%\shotcut-extracted\Shotcut\LICENSE" "!PACKAGE_ROOT!\licenses\Shotcut-LICENSE.txt" >nul
+    )
 
     powershell -NoProfile -Command "Compress-Archive -LiteralPath '!PACKAGE_ROOT!' -DestinationPath '!PACKAGE_ZIP!' -CompressionLevel Optimal -Force"
     if !ERRORLEVEL! neq 0 (

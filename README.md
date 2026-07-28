@@ -296,4 +296,8 @@ This quick guide is for users who are new to editing video with a screen reader.
 
 ## License
 
-MIT
+Thrive Video Suite is free software licensed under the
+[GNU General Public License version 3 or later](LICENSE).
+
+Third-party libraries and codecs remain under their respective licenses.
+See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for details.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Thrive Video Suite – Render engine implementation
 //
 // The actual encoding runs in a **child process** (our own exe with
