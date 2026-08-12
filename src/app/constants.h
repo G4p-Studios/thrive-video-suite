@@ -9,7 +9,7 @@ namespace Thrive {
 inline constexpr const char *kAppName        = "Thrive Video Suite";
 inline constexpr const char *kOrgName        = "ThriveProject";
 inline constexpr const char *kOrgDomain      = "thrivevideo.org";
-inline constexpr const char *kAppVersion     = "0.1.0";
+inline constexpr const char *kAppVersion     = "0.2.0";
 
 /// Project file extension (ZIP container)
 inline constexpr const char *kProjectExtension = ".tvs";
