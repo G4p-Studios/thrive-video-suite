@@ -135,6 +135,9 @@ void WelcomeWizard::addEditingPage()
            "<li><b>Enter</b> — place selected media on the timeline</li>"
            "<li><b>Delete</b> — remove selected clip</li>"
            "<li><b>Ctrl+X / C / V</b> — cut / copy / paste clips</li>"
+           "<li><b>[ / ]</b> — set the selection start / end</li>"
+           "<li><b>Ctrl+B / Ctrl+E</b> — paste at project beginning / end</li>"
+           "<li><b>Ctrl+M</b> — mix the clipboard at the selection</li>"
            "<li><b>Ctrl+Z / Ctrl+Y</b> — undo / redo</li>"
            "<li><b>Ctrl+S</b> — save project</li>"
            "<li><b>Ctrl+Shift+E</b> — export / render</li>"
@@ -145,7 +148,7 @@ void WelcomeWizard::addEffectsPage()
 {
     addPage(makePage(
         tr("Effects & Transitions"),
-        tr("<p>Press <b>Ctrl+E</b> to open the Effects Browser.  "
+        tr("<p>Press <b>Ctrl+4</b> to open the Effects Browser.  "
            "Type to search, then press <b>Enter</b> to apply an effect "
            "to the selected clip.</p>"
            "<p>Each effect has a spoken description so you know exactly "

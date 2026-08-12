@@ -2,6 +2,7 @@
 // Thrive Video Suite – Timeline unit tests
 
 #include <QTest>
+#include <QSignalSpy>
 #include "../src/core/timeline.h"
 #include "../src/core/track.h"
 #include "../src/core/clip.h"
@@ -120,6 +121,27 @@ private slots:
 
         m_timeline->navigatePreviousMarker();
         QCOMPARE(m_timeline->playheadPosition().frame(), 60);
+    }
+
+    void selectionRange()
+    {
+        QSignalSpy changed(m_timeline, &Timeline::selectionChanged);
+
+        m_timeline->setPlayheadPosition(TimeCode(25, 25.0));
+        m_timeline->setSelectionStart(m_timeline->playheadPosition());
+        QVERIFY(m_timeline->hasSelectionStart());
+        QVERIFY(!m_timeline->hasSelection());
+        QCOMPARE(m_timeline->selectionStart().frame(), 25);
+
+        QVERIFY(!m_timeline->setSelectionEnd(TimeCode(20, 25.0)));
+        QVERIFY(m_timeline->setSelectionEnd(TimeCode(75, 25.0)));
+        QVERIFY(m_timeline->hasSelection());
+        QCOMPARE(m_timeline->selectionEnd().frame(), 75);
+
+        m_timeline->clearSelection();
+        QVERIFY(!m_timeline->hasSelectionStart());
+        QVERIFY(!m_timeline->hasSelection());
+        QCOMPARE(changed.count(), 3);
     }
 
     // ── accessible summary ──────────────────────────────────────────

@@ -10,6 +10,7 @@
 #include <QSize>
 #include <QSet>
 #include <QString>
+#include <QThreadPool>
 
 namespace Mlt {
 class Profile;
@@ -70,6 +71,12 @@ private:
 
     MltEngine *m_engine = nullptr;
     int        m_thumbHeight = 60;
+
+    // Thumbnail decoding is deliberately isolated from Qt's global pool.
+    // A timeline can request dozens of visible frames at once; allowing all
+    // CPU cores to decode them concurrently makes the editor unresponsive and
+    // has exposed thread-safety problems in media backends.
+    QThreadPool m_decodePool;
 
     QMutex                    m_mutex;
     QHash<CacheKey, QPixmap>  m_cache;

@@ -5,6 +5,7 @@
 
 #include <QMainWindow>
 #include <QUndoStack>
+#include <cstdint>
 
 namespace Thrive {
 
@@ -84,6 +85,8 @@ private:
     void updateRecentMenu();
     void setupAutoSave();
     void performAutoSave();
+    void pasteClipboardAtFrame(int64_t frame, bool createMixTrack,
+                               const QString &announcementVerb);
 
     // Owned subsystems
     Project            *m_project   = nullptr;
@@ -111,6 +114,7 @@ private:
 
     // Clipboard for cut/copy/paste
     Clip   *m_clipboardClip = nullptr;
+    bool    m_clipboardIsAudio = false;
 
     // Actions
     QAction *m_actNew         = nullptr;
@@ -127,6 +131,9 @@ private:
     QAction *m_actCut         = nullptr;
     QAction *m_actCopy        = nullptr;
     QAction *m_actPaste       = nullptr;
+    QAction *m_actPasteBeginning = nullptr;
+    QAction *m_actPasteEnd    = nullptr;
+    QAction *m_actMix         = nullptr;
     QAction *m_actDelete      = nullptr;
     QAction *m_actSelectAll   = nullptr;
 
@@ -145,6 +152,8 @@ private:
     QAction *m_actLockTrack      = nullptr;
     QAction *m_actMoveClipUp     = nullptr;
     QAction *m_actMoveClipDown   = nullptr;
+    QAction *m_actSelectionStart = nullptr;
+    QAction *m_actSelectionEnd   = nullptr;
 
     // Transport actions (global shortcuts)
     QAction *m_actPlayPause      = nullptr;

@@ -556,6 +556,9 @@ void MainWindow::createActions()
     m_actCut       = new QAction(tr("Cu&t"),        this);
     m_actCopy      = new QAction(tr("&Copy"),       this);
     m_actPaste     = new QAction(tr("&Paste"),      this);
+    m_actPasteBeginning = new QAction(tr("Paste at &Beginning"), this);
+    m_actPasteEnd  = new QAction(tr("Paste at Project &End"), this);
+    m_actMix       = new QAction(tr("&Mix Clipboard at Selection"), this);
     m_actDelete    = new QAction(tr("&Delete"),     this);
     m_actSelectAll = new QAction(tr("Select &All"), this);
 
@@ -599,6 +602,7 @@ void MainWindow::createActions()
         const QString clipName = src->name();
         delete m_clipboardClip;
         m_clipboardClip = Clip::deepCopy(src, this);
+        m_clipboardIsAudio = trk->type() == Track::Type::Audio;
 
         m_undoStack->push(new RemoveClipCommand(trk, idx));
         m_modified = true;
@@ -624,6 +628,7 @@ void MainWindow::createActions()
         auto *src = trk->clipAt(idx);
         delete m_clipboardClip;
         m_clipboardClip = Clip::deepCopy(src, this);
+        m_clipboardIsAudio = trk->type() == Track::Type::Audio;
 
         m_announcer->announce(
             tr("Copied: %1").arg(src->name()), Announcer::Priority::Normal);
@@ -660,6 +665,21 @@ void MainWindow::createActions()
         m_announcer->announce(
             tr("Pasted: %1").arg(newClip->name()),
             Announcer::Priority::Normal);
+    });
+
+    connect(m_actPasteBeginning, &QAction::triggered, this, [this]() {
+        pasteClipboardAtFrame(0, false, tr("Pasted at project beginning"));
+    });
+    connect(m_actPasteEnd, &QAction::triggered, this, [this]() {
+        pasteClipboardAtFrame(m_project->timeline()->totalDuration().frame(),
+                              false, tr("Pasted at project end"));
+    });
+    connect(m_actMix, &QAction::triggered, this, [this]() {
+        auto *timeline = m_project->timeline();
+        const int64_t frame = timeline->hasSelectionStart()
+            ? timeline->selectionStart().frame()
+            : m_project->timeline()->playheadPosition().frame();
+        pasteClipboardAtFrame(frame, true, tr("Mixed"));
     });
 
     connect(m_actDelete, &QAction::triggered, this, [this, moveFocusToTimelineIfPropertiesFocused]() {
@@ -725,6 +745,44 @@ void MainWindow::createActions()
         rebuildTractor();
         m_announcer->announce(tr("Clip split at playhead."),
                               Announcer::Priority::High);
+    });
+
+    m_actSelectionStart = new QAction(tr("Set Selection &Start"), this);
+    connect(m_actSelectionStart, &QAction::triggered, this, [this]() {
+        auto *timeline = m_project->timeline();
+        timeline->setSelectionStart(timeline->playheadPosition());
+        m_announcer->announce(
+            tr("Selection starts at %1.")
+                .arg(timeline->selectionStart().toSpokenString()),
+            Announcer::Priority::High);
+    });
+
+    m_actSelectionEnd = new QAction(tr("Set Selection &End"), this);
+    connect(m_actSelectionEnd, &QAction::triggered, this, [this]() {
+        const int64_t frame =
+            qMax<int64_t>(0, m_project->timeline()->playheadPosition().frame());
+        auto *timeline = m_project->timeline();
+        if (!timeline->hasSelectionStart()) {
+            m_announcer->announce(tr("Set the selection start first."),
+                                  Announcer::Priority::High);
+            m_cues->play(AudioCueManager::Cue::Error);
+            return;
+        }
+        if (!timeline->setSelectionEnd(TimeCode(frame, m_project->fps()))) {
+            m_announcer->announce(
+                tr("Selection end must be after the selection start."),
+                Announcer::Priority::High);
+            m_cues->play(AudioCueManager::Cue::Error);
+            return;
+        }
+        const TimeCode duration(timeline->selectionEnd().frame()
+                                    - timeline->selectionStart().frame(),
+                                m_project->fps());
+        m_announcer->announce(
+            tr("Selection ends at %1. Duration %2.")
+                .arg(TimeCode(frame, m_project->fps()).toSpokenString(),
+                     duration.toSpokenString()),
+            Announcer::Priority::High);
     });
 
     m_actAddTrack = new QAction(tr("Add &Track…"), this);
@@ -2196,12 +2254,17 @@ void MainWindow::createMenus()
     editMenu->addAction(m_actCut);
     editMenu->addAction(m_actCopy);
     editMenu->addAction(m_actPaste);
+    editMenu->addAction(m_actPasteBeginning);
+    editMenu->addAction(m_actPasteEnd);
+    editMenu->addAction(m_actMix);
     editMenu->addAction(m_actDelete);
     editMenu->addSeparator();
     editMenu->addAction(m_actSelectAll);
 
     auto *timelineMenu = menuBar()->addMenu(tr("Time&line"));
     timelineMenu->addAction(m_actSplitClip);
+    timelineMenu->addAction(m_actSelectionStart);
+    timelineMenu->addAction(m_actSelectionEnd);
     timelineMenu->addSeparator();
     timelineMenu->addAction(m_actAddTrack);
     timelineMenu->addAction(m_actRemoveTrack);
@@ -2645,6 +2708,12 @@ void MainWindow::registerShortcuts()
     // Timeline menu shortcuts
     sm.registerAction(QStringLiteral("timeline.split"), m_actSplitClip,
                       QKeySequence(QStringLiteral("S")));
+    sm.registerAction(QStringLiteral("timeline.selectionStart"),
+                      m_actSelectionStart,
+                      QKeySequence(QStringLiteral("[")));
+    sm.registerAction(QStringLiteral("timeline.selectionEnd"),
+                      m_actSelectionEnd,
+                      QKeySequence(QStringLiteral("]")));
     sm.registerAction(QStringLiteral("timeline.addTrack"), m_actAddTrack,
                       QKeySequence(QStringLiteral("T")));
     sm.registerAction(QStringLiteral("timeline.removeTrack"), m_actRemoveTrack,
@@ -2676,7 +2745,7 @@ void MainWindow::registerShortcuts()
 
     // Track mute / lock
     sm.registerAction(QStringLiteral("timeline.muteTrack"), m_actMuteTrack,
-                      QKeySequence(QStringLiteral("Ctrl+M")));
+                      QKeySequence(QStringLiteral("Ctrl+0")));
     sm.registerAction(QStringLiteral("timeline.lockTrack"), m_actLockTrack,
                       QKeySequence(QStringLiteral("Ctrl+Shift+L")));
 
@@ -2688,7 +2757,7 @@ void MainWindow::registerShortcuts()
     sm.registerAction(QStringLiteral("view.focusMedia"), m_actFocusMedia,
                       QKeySequence(QStringLiteral("Ctrl+I")));
     sm.registerAction(QStringLiteral("view.focusEffects"), m_actFocusEffects,
-                      QKeySequence(QStringLiteral("Ctrl+E")));
+                      QKeySequence(QStringLiteral("Ctrl+4")));
     sm.registerAction(QStringLiteral("view.focusProperties"), m_actFocusProperties,
                       QKeySequence(QStringLiteral("Ctrl+P")));
     sm.registerAction(QStringLiteral("view.cyclePanels"), m_actCyclePanels,
@@ -2729,6 +2798,113 @@ void MainWindow::registerShortcuts()
                       QKeySequence(QStringLiteral("Ctrl+Left")));
     sm.registerAction(QStringLiteral("timeline.nudgeClipRight"), m_actNudgeClipRight,
                       QKeySequence(QStringLiteral("Ctrl+Right")));
+
+    // GoldWave-compatible clipboard workflow.
+    sm.registerAction(QStringLiteral("edit.pasteBeginning"),
+                      m_actPasteBeginning,
+                      QKeySequence(QStringLiteral("Ctrl+B")));
+    sm.registerAction(QStringLiteral("edit.pasteEnd"), m_actPasteEnd,
+                      QKeySequence(QStringLiteral("Ctrl+E")));
+    sm.registerAction(QStringLiteral("edit.mix"), m_actMix,
+                      QKeySequence(QStringLiteral("Ctrl+M")));
+}
+
+void MainWindow::pasteClipboardAtFrame(int64_t frame, bool createMixTrack,
+                                       const QString &announcementVerb)
+{
+    if (!m_clipboardClip) {
+        m_announcer->announce(tr("Clipboard is empty."),
+                              Announcer::Priority::Normal);
+        m_cues->play(AudioCueManager::Cue::Error);
+        return;
+    }
+
+    auto *timeline = m_project->timeline();
+    const Track::Type type = m_clipboardIsAudio ? Track::Type::Audio
+                                                : Track::Type::Video;
+    const int64_t start = qMax<int64_t>(0, frame);
+    const int64_t span = qMax<int64_t>(1, m_clipboardClip->duration().frame());
+    const int64_t end = start + span;
+
+    auto hasRoom = [start, end](const Track *track) {
+        for (const auto *clip : track->clips()) {
+            const int64_t clipStart = clip->timelinePosition().frame();
+            const int64_t clipEnd = clipStart
+                + qMax<int64_t>(1, clip->duration().frame());
+            if (!(end <= clipStart || start >= clipEnd))
+                return false;
+        }
+        return true;
+    };
+
+    Track *target = nullptr;
+    if (!createMixTrack) {
+        auto *current = timeline->trackAt(timeline->currentTrackIndex());
+        if (current && current->type() == type && !current->isLocked()
+            && hasRoom(current)) {
+            target = current;
+        }
+        if (!target) {
+            for (auto *candidate : timeline->tracks()) {
+                if (candidate && candidate->type() == type
+                    && !candidate->isLocked() && hasRoom(candidate)) {
+                    target = candidate;
+                    break;
+                }
+            }
+        }
+    }
+
+    const bool addTrack = !target;
+    if (addTrack) {
+        int sameTypeCount = 0;
+        for (const auto *track : timeline->tracks()) {
+            if (track && track->type() == type)
+                ++sameTypeCount;
+        }
+        const QString baseName = type == Track::Type::Audio ? tr("Audio")
+                                                            : tr("Video");
+        target = new Track(tr("%1 %2").arg(baseName).arg(sameTypeCount + 1),
+                           type);
+    }
+
+    auto *newClip = Clip::deepCopy(m_clipboardClip);
+    newClip->setTimelinePosition(TimeCode(start, m_project->fps()));
+    if (createMixTrack && timeline->hasSelection()
+        && timeline->selectionEnd().frame() > start) {
+        const int64_t selectionSpan = timeline->selectionEnd().frame() - start;
+        if (selectionSpan < newClip->duration().frame()) {
+            newClip->setOutPoint(TimeCode(
+                newClip->inPoint().frame() + selectionSpan,
+                newClip->inPoint().fps()));
+        }
+    }
+
+    if (addTrack) {
+        m_undoStack->beginMacro(createMixTrack ? tr("Mix clipboard")
+                                               : tr("Paste clipboard"));
+        m_undoStack->push(new AddTrackCommand(timeline, target));
+        m_undoStack->push(new AddClipCommand(target, newClip));
+        m_undoStack->endMacro();
+    } else {
+        m_undoStack->push(new AddClipCommand(target, newClip));
+    }
+
+    for (int i = 0; i < timeline->trackCount(); ++i) {
+        if (timeline->trackAt(i) == target) {
+            timeline->setCurrentTrackIndex(i);
+            timeline->setCurrentClipIndex(target->clipCount() - 1);
+            break;
+        }
+    }
+
+    m_modified = true;
+    deferRebuildTractor();
+    m_announcer->announce(
+        tr("%1: %2 at %3 on %4.")
+            .arg(announcementVerb, newClip->name(),
+                 newClip->timelinePosition().toSpokenString(), target->name()),
+        Announcer::Priority::High);
 }
 
 void MainWindow::rebuildTractor()

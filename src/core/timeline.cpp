@@ -88,6 +88,43 @@ void Timeline::setPlayheadPosition(const TimeCode &pos)
     emit playheadChanged(m_playhead);
 }
 
+TimeCode Timeline::selectionStart() const
+{
+    return TimeCode(qMax<int64_t>(0, m_selectionStartFrame), m_playhead.fps());
+}
+
+TimeCode Timeline::selectionEnd() const
+{
+    return TimeCode(qMax<int64_t>(0, m_selectionEndFrame), m_playhead.fps());
+}
+
+void Timeline::setSelectionStart(const TimeCode &pos)
+{
+    m_selectionStartFrame = qMax<int64_t>(0, pos.frame());
+    if (m_selectionEndFrame <= m_selectionStartFrame)
+        m_selectionEndFrame = -1;
+    emit selectionChanged();
+}
+
+bool Timeline::setSelectionEnd(const TimeCode &pos)
+{
+    if (m_selectionStartFrame < 0 || pos.frame() <= m_selectionStartFrame)
+        return false;
+
+    m_selectionEndFrame = pos.frame();
+    emit selectionChanged();
+    return true;
+}
+
+void Timeline::clearSelection()
+{
+    if (m_selectionStartFrame < 0 && m_selectionEndFrame < 0)
+        return;
+    m_selectionStartFrame = -1;
+    m_selectionEndFrame = -1;
+    emit selectionChanged();
+}
+
 TimeCode Timeline::totalDuration() const
 {
     TimeCode maxEnd;

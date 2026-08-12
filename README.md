@@ -180,6 +180,7 @@ The following tables list the default keyboard shortcuts by editing workflow.
 | Action | Shortcut |
 |---|---|
 | Split Clip at Playhead | S |
+| Set Selection Start / End | [ / ] |
 | Add Track | T |
 | Remove Current Track | Shift+Delete |
 | Add Stack | Ctrl+Shift+B |
@@ -192,7 +193,7 @@ The following tables list the default keyboard shortcuts by editing workflow.
 | Move Clip to Track Above / Below | Shift+Up / Shift+Down |
 | Move Track Up / Down | Alt+Up / Alt+Down |
 | Nudge Clip Left / Right | Ctrl+Left / Ctrl+Right |
-| Toggle Track Mute | Ctrl+M |
+| Toggle Track Mute | Ctrl+0 |
 | Toggle Track Lock | Ctrl+Shift+L |
 | Solo Current Track | Ctrl+Shift+O |
 | Toggle Marker Jump Snap | Ctrl+Shift+J |
@@ -204,7 +205,7 @@ The following tables list the default keyboard shortcuts by editing workflow.
 | Focus Timeline | Ctrl+1 |
 | Focus Transport | Ctrl+2 |
 | Focus Media Browser | Ctrl+I |
-| Focus Effects Browser | Ctrl+E |
+| Focus Effects Browser | Ctrl+4 |
 | Focus Properties Panel | Ctrl+P |
 | Cycle Panel Focus | F6 |
 | Announce Current Context | Ctrl+Shift+W |
@@ -224,6 +225,8 @@ The following tables list the default keyboard shortcuts by editing workflow.
 | Quit | Ctrl+Q |
 | Undo / Redo | Ctrl+Z / Ctrl+Y |
 | Cut / Copy / Paste / Delete | Ctrl+X / Ctrl+C / Ctrl+V / Delete |
+| Paste at Project Beginning / End | Ctrl+B / Ctrl+E |
+| Mix Clipboard at Selection | Ctrl+M |
 | Select All | Ctrl+A |
 
 All shortcuts are customisable in **Preferences -> Shortcuts**. Context verbosity, marker jump snap, and Intro dry-run mode defaults are configurable in **Preferences -> General** and are persisted between sessions.

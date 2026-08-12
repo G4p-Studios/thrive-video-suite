@@ -42,6 +42,18 @@ public:
     [[nodiscard]] TimeCode playheadPosition() const { return m_playhead; }
     void setPlayheadPosition(const TimeCode &pos);
 
+    // Optional project-range selection used by keyboard editing commands.
+    [[nodiscard]] bool hasSelectionStart() const { return m_selectionStartFrame >= 0; }
+    [[nodiscard]] bool hasSelection() const {
+        return m_selectionStartFrame >= 0
+            && m_selectionEndFrame > m_selectionStartFrame;
+    }
+    [[nodiscard]] TimeCode selectionStart() const;
+    [[nodiscard]] TimeCode selectionEnd() const;
+    void setSelectionStart(const TimeCode &pos);
+    bool setSelectionEnd(const TimeCode &pos);
+    void clearSelection();
+
     // Total duration (end of the last clip across all tracks)
     [[nodiscard]] TimeCode totalDuration() const;
 
@@ -68,6 +80,7 @@ signals:
     void tracksChanged();
     void markersChanged();
     void playheadChanged(const TimeCode &position);
+    void selectionChanged();
     void currentTrackChanged(int trackIndex);
     void currentClipChanged(int trackIndex, int clipIndex);
 
@@ -75,6 +88,8 @@ private:
     QVector<Track *>  m_tracks;
     QVector<Marker *> m_markers;
     TimeCode m_playhead;
+    int64_t m_selectionStartFrame = -1;
+    int64_t m_selectionEndFrame = -1;
     int m_currentTrackIndex = 0;
     int m_currentClipIndex  = 0;
 };

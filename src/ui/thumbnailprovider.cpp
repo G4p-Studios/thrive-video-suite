@@ -9,7 +9,6 @@
 #include <mlt++/MltFrame.h>
 
 #include <QImage>
-#include <QThreadPool>
 #include <QRunnable>
 #include <QDebug>
 
@@ -37,7 +36,10 @@ public:
     void run() override
     {
         auto *profile = m_engine->compositionProfile();
-        if (!profile) return;
+        if (!profile) {
+            complete({});
+            return;
+        }
 
         // Create a lightweight producer just for thumbnail extraction.
         // Try avformat: prefix directly since that's what works on Windows.
@@ -49,6 +51,7 @@ public:
             Mlt::Producer bare(*profile, m_sourcePath.toUtf8().constData());
             if (!bare.is_valid()) {
                 qDebug() << "ThumbnailProvider: cannot open" << m_sourcePath;
+                complete({});
                 return;
             }
             extractFrame(bare);
@@ -63,32 +66,48 @@ private:
     {
         producer.seek(m_frame);
         std::unique_ptr<Mlt::Frame> frame(producer.get_frame());
-        if (!frame || !frame->is_valid())
+        if (!frame || !frame->is_valid()) {
+            complete({});
             return;
+        }
 
         // Request image at thumbnail resolution
         mlt_image_format fmt = mlt_image_rgba;
         int w = m_size.width();
         int h = m_size.height();
         const uint8_t *data = frame->get_image(fmt, w, h);
-        if (!data)
+        if (!data) {
+            complete({});
             return;
-
-        QImage img(data, w, h, w * 4, QImage::Format_RGBA8888);
-        QPixmap px = QPixmap::fromImage(img.copy()); // deep copy before frame dies
-
-        // Store in cache
-        ThumbnailProvider::CacheKey key{m_sourcePath, m_frame};
-        {
-            QMutexLocker lock(&m_provider->m_mutex);
-            m_provider->m_cache.insert(key, px);
-            m_provider->m_pending.remove(key);
         }
 
-        // Signal on main thread
-        QMetaObject::invokeMethod(m_provider, [this]() {
-            emit m_provider->thumbnailReady(m_sourcePath, m_frame);
-        }, Qt::QueuedConnection);
+        QImage img(data, w, h, w * 4, QImage::Format_RGBA8888);
+        complete(img.copy()); // deep copy before the MLT frame is destroyed
+    }
+
+    void complete(QImage image)
+    {
+        // QPixmap is a GUI resource and must only be created on the GUI
+        // thread.  Capture values rather than `this`: QRunnable deletes this
+        // task as soon as run() returns, before this callback normally runs.
+        auto *provider = m_provider;
+        const QString sourcePath = m_sourcePath;
+        const int frame = m_frame;
+        QMetaObject::invokeMethod(provider,
+            [provider, sourcePath, frame, image = std::move(image)]() mutable {
+                const ThumbnailProvider::CacheKey key{sourcePath, frame};
+                const bool succeeded = !image.isNull();
+                {
+                    QMutexLocker lock(&provider->m_mutex);
+                    provider->m_pending.remove(key);
+                    if (succeeded)
+                        provider->m_cache.insert(key,
+                            QPixmap::fromImage(std::move(image)));
+                }
+                if (succeeded)
+                    emit provider->thumbnailReady(sourcePath, frame);
+            },
+            Qt::QueuedConnection);
     }
 
     ThumbnailProvider *m_provider;
@@ -104,13 +123,24 @@ ThumbnailProvider::ThumbnailProvider(MltEngine *engine, QObject *parent)
     : QObject(parent)
     , m_engine(engine)
 {
+    m_decodePool.setMaxThreadCount(1);
+    m_decodePool.setExpiryTimeout(5000);
 }
 
-ThumbnailProvider::~ThumbnailProvider() = default;
+ThumbnailProvider::~ThumbnailProvider()
+{
+    m_decodePool.clear();
+    m_decodePool.waitForDone();
+}
 
 QPixmap ThumbnailProvider::thumbnail(const QString &sourcePath, int frame,
                                      const QSize &size)
 {
+    if (!m_engine || !m_engine->isInitialized() || sourcePath.isEmpty()
+        || size.isEmpty()) {
+        return {};
+    }
+
     CacheKey key{sourcePath, frame};
 
     QMutexLocker lock(&m_mutex);
@@ -151,7 +181,7 @@ void ThumbnailProvider::generateInThread(const QString &sourcePath,
                                          int frame, const QSize &size)
 {
     auto *task = new ThumbnailTask(this, m_engine, sourcePath, frame, size);
-    QThreadPool::globalInstance()->start(task);
+    m_decodePool.start(task);
 }
 
 } // namespace Thrive

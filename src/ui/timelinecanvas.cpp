@@ -33,6 +33,7 @@ TimelineCanvas::TimelineCanvas(Timeline *timeline,
     if (m_timeline) {
         connect(m_timeline, &Timeline::tracksChanged, this, [this]() { update(); });
         connect(m_timeline, &Timeline::playheadChanged, this, [this]() { update(); });
+        connect(m_timeline, &Timeline::selectionChanged, this, [this]() { update(); });
         connect(m_timeline, &Timeline::currentTrackChanged, this, [this]() { update(); });
         connect(m_timeline, &Timeline::currentClipChanged, this, [this](int,int) { update(); });
     }
@@ -51,6 +52,7 @@ void TimelineCanvas::setTimeline(Timeline *timeline)
     if (m_timeline) {
         connect(m_timeline, &Timeline::tracksChanged, this, [this]() { update(); });
         connect(m_timeline, &Timeline::playheadChanged, this, [this]() { update(); });
+        connect(m_timeline, &Timeline::selectionChanged, this, [this]() { update(); });
         connect(m_timeline, &Timeline::currentTrackChanged, this, [this]() { update(); });
         connect(m_timeline, &Timeline::currentClipChanged, this, [this](int,int) { update(); });
     }
@@ -119,7 +121,34 @@ void TimelineCanvas::paintEvent(QPaintEvent *event)
 
     drawRuler(p, clip);
     drawTracks(p, clip);
+    drawSelection(p);
     drawPlayhead(p, clip);
+}
+
+void TimelineCanvas::drawSelection(QPainter &p)
+{
+    if (!m_timeline || !m_timeline->hasSelection())
+        return;
+
+    const int startX = HeaderWidth
+        + static_cast<int>(m_timeline->selectionStart().frame() * m_ppf)
+        - m_scrollX;
+    const int endX = HeaderWidth
+        + static_cast<int>(m_timeline->selectionEnd().frame() * m_ppf)
+        - m_scrollX;
+    if (endX < HeaderWidth || startX > width())
+        return;
+
+    QColor fill = palette().color(QPalette::Highlight);
+    fill.setAlpha(55);
+    p.fillRect(QRect(std::max(startX, HeaderWidth), RulerHeight,
+                     std::max(1, std::min(endX, width())
+                                     - std::max(startX, HeaderWidth)),
+                     height() - RulerHeight),
+               fill);
+    p.setPen(QPen(palette().color(QPalette::Highlight), 2));
+    p.drawLine(startX, RulerHeight, startX, height());
+    p.drawLine(endX, RulerHeight, endX, height());
 }
 
 // ── ruler ───────────────────────────────────────────────────────────
@@ -272,11 +301,22 @@ void TimelineCanvas::drawTracks(QPainter &p, const QRect & /*clip*/)
                     clipPath.addRoundedRect(clipRect, 4, 4);
                     p.setClipPath(clipPath);
 
-                    // Draw thumbnails at regular intervals across the clip
+                    // Draw only thumbnails that can actually appear in the
+                    // viewport.  Long clips (and still-image producers with
+                    // effectively unbounded durations) must not enqueue one
+                    // decode for every off-screen strip position.
                     const int inFrame = static_cast<int>(cl->inPoint().frame());
-                    for (int px = clipX + ThumbPadding;
-                         px < clipX + clipW - ThumbPadding;
-                         px += thumbW + 1)
+                    const int step = thumbW + 1;
+                    const int stripStart = clipX + ThumbPadding;
+                    const int visibleLeft = std::max(stripStart, HeaderWidth);
+                    const int visibleRight = std::min(clipX + clipW - ThumbPadding,
+                                                      width());
+                    const int firstStrip = visibleLeft > stripStart
+                        ? (visibleLeft - stripStart + step - 1) / step
+                        : 0;
+                    for (int px = stripStart + firstStrip * step;
+                         px < visibleRight;
+                         px += step)
                     {
                         // Map pixel position back to source frame
                         double frac = static_cast<double>(px - clipX) / clipW;

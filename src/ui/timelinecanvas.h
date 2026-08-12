@@ -69,6 +69,7 @@ protected:
 private:
     void drawRuler(QPainter &p, const QRect &clip);
     void drawTracks(QPainter &p, const QRect &clip);
+    void drawSelection(QPainter &p);
     void drawPlayhead(QPainter &p, const QRect &clip);
 
     Timeline          *m_timeline = nullptr;
